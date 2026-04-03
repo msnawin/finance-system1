@@ -49,7 +49,7 @@ function App() {
           </header>
           
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Dashboard user={user} />} />
             <Route path="/transactions" element={<Transactions user={user} />} />
             {user.role === 'ADMIN' && (
               <Route path="/users" element={<Users />} />

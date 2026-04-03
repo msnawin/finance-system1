@@ -8,6 +8,7 @@ import com.finance.dashboard.model.Role;
 import com.finance.dashboard.model.TransactionType;
 import com.finance.dashboard.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -20,26 +21,30 @@ public class DashboardService {
 
     private final TransactionRepository transactionRepository;
 
+    /**
+     * ADMIN → sees aggregate data for ALL users (targetUserId = null).
+     * ANALYST / VIEWER → sees only their own data (targetUserId = their ID).
+     */
     public DashboardSummaryDto getDashboardSummary(Long userId, Role role) {
-        // As per strictly user-specific requirements: everything must be isolated to logged-in user.
-        Long targetUserId = userId;
+        Long targetUserId = (role == Role.ADMIN) ? null : userId;
 
         BigDecimal totalIncome = transactionRepository.sumAmountByType(TransactionType.INCOME, targetUserId);
         BigDecimal totalExpense = transactionRepository.sumAmountByType(TransactionType.EXPENSE, targetUserId);
-        
-        if(totalIncome == null) totalIncome = BigDecimal.ZERO;
-        if(totalExpense == null) totalExpense = BigDecimal.ZERO;
+        if (totalIncome == null) totalIncome = BigDecimal.ZERO;
+        if (totalExpense == null) totalExpense = BigDecimal.ZERO;
 
         BigDecimal netBalance = totalIncome.subtract(totalExpense);
 
-        List<Object[]> catTotals = transactionRepository.findCategoryTotals(TransactionType.EXPENSE, targetUserId);
-        List<CategoryTotalDto> categoryTotals = catTotals.stream()
+        // Category breakdown — expenses only
+        List<Object[]> catRaw = transactionRepository.findCategoryTotals(TransactionType.EXPENSE, targetUserId);
+        List<CategoryTotalDto> categoryTotals = catRaw.stream()
                 .map(obj -> new CategoryTotalDto((String) obj[0], (BigDecimal) obj[1]))
                 .collect(Collectors.toList());
 
-        var recentTransactions = transactionRepository.findTop5ByDeletedFalseAndCreatedByIdOrderByDateDesc(userId);
-
-        List<TransactionDto> recentDtos = recentTransactions.stream()
+        // 5 most recent transactions
+        List<TransactionDto> recentDtos = transactionRepository
+                .findRecentTransactions(targetUserId, PageRequest.of(0, 5))
+                .stream()
                 .map(t -> {
                     TransactionDto dto = new TransactionDto();
                     dto.setId(t.getId());
@@ -55,9 +60,13 @@ public class DashboardService {
                     return dto;
                 }).collect(Collectors.toList());
 
-        List<Object[]> monthlyData = transactionRepository.findMonthlyTrends(targetUserId);
-        List<MonthlyTrendDto> monthlyTrends = monthlyData.stream()
-                .map(obj -> new MonthlyTrendDto((String) obj[0], (BigDecimal) obj[1], (BigDecimal) obj[2]))
+        // Monthly trends (last 12 months)
+        List<Object[]> monthlyRaw = transactionRepository.findMonthlyTrends(targetUserId);
+        List<MonthlyTrendDto> monthlyTrends = monthlyRaw.stream()
+                .map(obj -> new MonthlyTrendDto(
+                        (String) obj[0],
+                        obj[1] != null ? (BigDecimal) obj[1] : BigDecimal.ZERO,
+                        obj[2] != null ? (BigDecimal) obj[2] : BigDecimal.ZERO))
                 .collect(Collectors.toList());
 
         return DashboardSummaryDto.builder()

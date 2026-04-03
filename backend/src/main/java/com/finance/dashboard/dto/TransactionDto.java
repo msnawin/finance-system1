@@ -29,4 +29,7 @@ public class TransactionDto {
     private String notes;
     private Long createdById;
     private String createdByName;
+
+    // Admin-only: specify which user this transaction belongs to
+    private Long targetUserId;
 }

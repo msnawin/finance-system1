@@ -11,6 +11,7 @@ import com.finance.dashboard.repository.TransactionRepository;
 import com.finance.dashboard.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -23,9 +24,9 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
 
-    public TransactionDto createTransaction(TransactionDto dto, Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    public TransactionDto createTransaction(TransactionDto dto, Long ownerId) {
+        User owner = userRepository.findById(ownerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Target user not found: " + ownerId));
 
         Transaction transaction = Transaction.builder()
                 .amount(dto.getAmount())
@@ -33,26 +34,31 @@ public class TransactionService {
                 .category(dto.getCategory())
                 .date(dto.getDate())
                 .notes(dto.getNotes())
-                .createdBy(user)
+                .createdBy(owner)
                 .build();
 
-        Transaction saved = transactionRepository.save(transaction);
-        return mapToDto(saved);
+        return mapToDto(transactionRepository.save(transaction));
     }
 
-    public Page<TransactionDto> getTransactions(TransactionType type, String category, LocalDate startDate, LocalDate endDate, String search, Long userId, Pageable pageable) {
-        return transactionRepository.findAllFiltered(type, category, startDate, endDate, search, userId, pageable)
+    /**
+     * @param filterUserId null = admin (return all), non-null = filter to that user
+     */
+    public Page<TransactionDto> getTransactions(
+            TransactionType type, String category,
+            LocalDate startDate, LocalDate endDate,
+            String search, Long filterUserId, Pageable pageable) {
+
+        return transactionRepository
+                .findAllFiltered(filterUserId, type, category, startDate, endDate, search, pageable)
                 .map(this::mapToDto);
     }
 
-    public TransactionDto updateTransaction(Long id, TransactionDto dto, Long currentUserId, Role currentUserRole) {
+    public TransactionDto updateTransaction(Long id, TransactionDto dto, Long callerId, Role callerRole) {
         Transaction transaction = transactionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found"));
 
-        // Admin can update anything, Analyst/Viewer can only update if it is theirs? 
-        // Requirements state "When the same user logs in, they should only see their own transactions"
-        if (currentUserRole != Role.ADMIN && !transaction.getCreatedBy().getId().equals(currentUserId)) {
-             throw new UnauthorizedException("You can only update your own transactions");
+        if (callerRole != Role.ADMIN && !transaction.getCreatedBy().getId().equals(callerId)) {
+            throw new UnauthorizedException("You can only update your own transactions");
         }
 
         transaction.setAmount(dto.getAmount());
@@ -61,25 +67,22 @@ public class TransactionService {
         transaction.setDate(dto.getDate());
         transaction.setNotes(dto.getNotes());
 
-        Transaction updated = transactionRepository.save(transaction);
-        return mapToDto(updated);
+        return mapToDto(transactionRepository.save(transaction));
     }
 
-    public void deleteTransaction(Long id, Long currentUserId, Role currentUserRole) {
+    public void deleteTransaction(Long id, Long callerId, Role callerRole) {
         Transaction transaction = transactionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found"));
 
-        // Allow admins, or allow users to delete their own
-        if (currentUserRole != Role.ADMIN && !transaction.getCreatedBy().getId().equals(currentUserId)) {
+        if (callerRole != Role.ADMIN && !transaction.getCreatedBy().getId().equals(callerId)) {
             throw new UnauthorizedException("You can only delete your own transactions");
         }
 
-        // Soft delete
         transaction.setDeleted(true);
         transactionRepository.save(transaction);
     }
 
-    private TransactionDto mapToDto(Transaction t) {
+    public TransactionDto mapToDto(Transaction t) {
         TransactionDto dto = new TransactionDto();
         dto.setId(t.getId());
         dto.setAmount(t.getAmount());

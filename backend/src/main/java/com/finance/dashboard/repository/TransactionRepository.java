@@ -12,41 +12,48 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
-    // For logical deletion
-    Page<Transaction> findByDeletedFalse(Pageable pageable);
-
-    // Filtering active transactions
-    @Query("SELECT t FROM Transaction t WHERE t.deleted = false AND t.createdBy.id = :userId AND " +
+    /**
+     * Filtered query. If userId is NULL (admin), returns all transactions.
+     * If userId is provided, returns only that user's transactions.
+     */
+    @Query("SELECT t FROM Transaction t WHERE t.deleted = false AND " +
+           "(:userId IS NULL OR t.createdBy.id = :userId) AND " +
            "(:type IS NULL OR t.type = :type) AND " +
            "(:category IS NULL OR t.category = :category) AND " +
            "(:startDate IS NULL OR t.date >= :startDate) AND " +
            "(:endDate IS NULL OR t.date <= :endDate) AND " +
-           "(:search IS NULL OR LOWER(t.notes) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(t.category) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(:search IS NULL OR LOWER(t.notes) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "   OR LOWER(t.category) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<Transaction> findAllFiltered(
+            @Param("userId") Long userId,
             @Param("type") TransactionType type,
             @Param("category") String category,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
             @Param("search") String search,
-            @Param("userId") Long userId,
             Pageable pageable);
 
-    // Dashboard Queries
-    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t WHERE t.deleted = false AND t.type = :type AND (:userId IS NULL OR t.createdBy.id = :userId)")
+    // Dashboard: sum by type, optionally scoped to a user
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
+           "WHERE t.deleted = false AND t.type = :type AND (:userId IS NULL OR t.createdBy.id = :userId)")
     BigDecimal sumAmountByType(@Param("type") TransactionType type, @Param("userId") Long userId);
 
-    @Query("SELECT t.category as category, SUM(t.amount) as totalAmount FROM Transaction t WHERE t.deleted = false AND t.type = :type AND (:userId IS NULL OR t.createdBy.id = :userId) GROUP BY t.category")
+    // Category breakdown (for pie chart)
+    @Query("SELECT t.category as category, SUM(t.amount) as totalAmount FROM Transaction t " +
+           "WHERE t.deleted = false AND t.type = :type AND (:userId IS NULL OR t.createdBy.id = :userId) " +
+           "GROUP BY t.category")
     List<Object[]> findCategoryTotals(@Param("type") TransactionType type, @Param("userId") Long userId);
 
-    List<Transaction> findTop5ByDeletedFalseAndCreatedByIdOrderByDateDesc(Long userId);
-    List<Transaction> findTop5ByDeletedFalseOrderByDateDesc();
+    // Recent transactions (user-scoped or all)
+    @Query("SELECT t FROM Transaction t WHERE t.deleted = false AND (:userId IS NULL OR t.createdBy.id = :userId) " +
+           "ORDER BY t.date DESC")
+    List<Transaction> findRecentTransactions(@Param("userId") Long userId, Pageable pageable);
 
-    // For Monthly Trends
+    // Monthly trends
     @Query(value = "SELECT DATE_FORMAT(date, '%Y-%m') as monthStr, " +
             "SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income, " +
             "SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense " +
