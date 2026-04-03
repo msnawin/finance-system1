@@ -1,371 +1,369 @@
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import {
+  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from 'recharts';
 import { Wallet, TrendingUp, TrendingDown, RefreshCcw, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import api from '../api';
 
-const fmt = (n) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n || 0);
+/* ─── Formatters ─────────────────────────── */
+const currency = (n) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n ?? 0);
 
-/* ── 3D Tilt Card ── */
-function TiltCard({ children, className = '', glowColor = 'rgba(59,130,246,0.3)' }) {
+const shortMoney = (v) => {
+  const n = Number(v);
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)     return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n}`;
+};
+
+/* ─── Colours ────────────────────────────── */
+const EMERALD = '#10b981';
+const ROSE    = '#f43f5e';
+const BLUE    = '#3b82f6';
+const PALETTE = ['#3b82f6','#8b5cf6','#f59e0b','#06b6d4','#f97316','#ec4899','#10b981'];
+
+/* ─── Tilt Card ─────────────────────────── */
+function TiltCard({ children, glow = BLUE, className = '' }) {
   const ref = useRef(null);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const rotateX = useTransform(y, [-0.5, 0.5], [6, -6]);
-  const rotateY = useTransform(x, [-0.5, 0.5], [-6, 6]);
 
-  const handleMouse = (e) => {
-    const rect = ref.current.getBoundingClientRect();
-    x.set((e.clientX - rect.left) / rect.width - 0.5);
-    y.set((e.clientY - rect.top)  / rect.height - 0.5);
-  };
-  const reset = () => { x.set(0); y.set(0); };
+  const move = useCallback((e) => {
+    const el = ref.current;
+    if (!el) return;
+    const { left, top, width, height } = el.getBoundingClientRect();
+    const x = ((e.clientX - left) / width  - 0.5) * 14;
+    const y = ((e.clientY - top)  / height - 0.5) * -14;
+    el.style.transform = `perspective(700px) rotateY(${x}deg) rotateX(${y}deg) scale(1.02)`;
+    el.style.boxShadow = `0 0 0 1px rgba(255,255,255,0.08), 0 20px 50px rgba(0,0,0,0.4), 0 0 60px -15px ${glow}55`;
+  }, [glow]);
+
+  const reset = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.transform = 'perspective(700px) rotateY(0deg) rotateX(0deg) scale(1)';
+    el.style.boxShadow = '0 0 0 1px rgba(255,255,255,0.06), 0 10px 30px rgba(0,0,0,0.3)';
+  }, []);
 
   return (
-    <motion.div
+    <div
       ref={ref}
-      onMouseMove={handleMouse}
+      onMouseMove={move}
       onMouseLeave={reset}
-      whileHover={{ scale: 1.02 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-      style={{
-        rotateX, rotateY,
-        transformStyle: 'preserve-3d',
-        perspective: 800,
-        boxShadow: `0 0 0 1px rgba(255,255,255,0.06), 0 20px 40px -10px rgba(0,0,0,0.4), 0 0 60px -15px ${glowColor}`,
-      }}
-      className={`glass p-6 cursor-default ${className}`}
+      className={`glass p-6 transition-transform duration-200 cursor-default ${className}`}
+      style={{ willChange: 'transform', boxShadow: '0 0 0 1px rgba(255,255,255,0.06), 0 10px 30px rgba(0,0,0,0.3)' }}
     >
       {children}
+    </div>
+  );
+}
+
+/* ─── Custom Tooltip ────────────────────── */
+const ChartTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
+      {label && <p style={{ color: '#94a3b8', marginBottom: 4 }}>{label}</p>}
+      {payload.map(p => (
+        <p key={p.dataKey} style={{ color: p.color || '#e2e8f0', fontWeight: 600 }}>
+          {p.name}: {shortMoney(p.value)}
+        </p>
+      ))}
+    </div>
+  );
+};
+
+/* ─── Stat Card ─────────────────────────── */
+const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
+const fadeUp  = { hidden: { opacity: 0, y: 24 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 220, damping: 22 } } };
+
+function StatCard({ label, value, sub, icon: Icon, iconBg, valueColor }) {
+  return (
+    <motion.div variants={fadeUp}>
+      <TiltCard glow={iconBg}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">{label}</p>
+            <p className={`text-2xl font-black ${valueColor} leading-tight`}>{value}</p>
+            {sub && <p className="text-xs text-slate-600 mt-1.5">{sub}</p>}
+          </div>
+          <div className="p-3 rounded-xl shrink-0" style={{ background: `${iconBg}22` }}>
+            <Icon size={20} style={{ color: iconBg }} />
+          </div>
+        </div>
+      </TiltCard>
     </motion.div>
   );
 }
 
-/* ── Custom Pie Label ── */
-const RADIAN = Math.PI / 180;
-const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
-  if (percent < 0.04) return null;
-  const r = innerRadius + (outerRadius - innerRadius) * 0.5;
-  const px = cx + (r + 25) * Math.cos(-midAngle * RADIAN);
-  const py = cy + (r + 25) * Math.sin(-midAngle * RADIAN);
-  return (
-    <text x={px} y={py} fill="#e6edf3" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
-      {name} {(percent * 100).toFixed(0)}%
-    </text>
-  );
-};
-
-/* ── Animated Pie Shape ── */
-function AnimatedPieSlice(props) {
-  return (
-    <motion.path
-      {...props}
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      whileHover={{ scale: 1.05 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-      style={{ transformOrigin: 'center', cursor: 'pointer' }}
-    />
-  );
-}
-
+/* ══════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════ */
 export default function Dashboard({ user }) {
-  const [data, setData]       = useState(null);
+  const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
+  const [error,   setError]   = useState(null);
 
-  const fetch = () => {
-    setLoading(true);
+  const fetchData = useCallback(() => {
+    setLoading(true); setError(null);
     api.get('/dashboard/summary')
-      .then(r  => { setData(r.data); setLoading(false); })
-      .catch(() => { setError('Failed to load.'); setLoading(false); });
-  };
-  useEffect(fetch, []);
+      .then(r  => { setData(r.data); })
+      .catch(() => setError('Could not load dashboard data.'))
+      .finally(() => setLoading(false));
+  }, []);
 
-  if (loading)
-    return (
-      <div className="flex items-center justify-center h-full">
-        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-          className="w-10 h-10 rounded-full border-4 border-blue-500 border-t-transparent" />
-      </div>
-    );
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  if (error || !data)
-    return <p className="text-center text-red-400 mt-20">{error || 'No data.'}</p>;
+  /* Loading */
+  if (loading) return (
+    <div className="flex h-full min-h-screen items-center justify-center">
+      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.9, ease: 'linear' }}
+        className="w-9 h-9 rounded-full border-[3px] border-blue-500 border-t-transparent" />
+    </div>
+  );
 
-  const income  = Number(data.totalIncome  || 0);
-  const expense = Number(data.totalExpense || 0);
-  const balance = Number(data.netBalance   || 0);
+  /* Error */
+  if (error) return (
+    <div className="flex h-full min-h-screen items-center justify-center text-rose-400 text-sm">{error}</div>
+  );
+
+  const income  = Number(data?.totalIncome  ?? 0);
+  const expense = Number(data?.totalExpense ?? 0);
+  const balance = Number(data?.netBalance   ?? 0);
   const isAdmin = user?.role === 'ADMIN';
 
+  /* ── Pie data: Income vs Expense ── */
   const pieData = [
     { name: 'Income',  value: income  },
     { name: 'Expense', value: expense },
   ].filter(d => d.value > 0);
 
-  const catData = (data.categoryTotals || []).map(c => ({ name: c.category, value: Number(c.totalAmount || 0) }));
+  /* ── Category pie data ── */
+  const catData = (data?.categoryTotals ?? [])
+    .filter(c => Number(c.totalAmount) > 0)
+    .map(c => ({ name: c.category, value: Number(c.totalAmount) }));
 
-  const barData = (data.monthlyTrends || []).slice().reverse().map(m => ({
-    month:   m.month,
-    Income:  Number(m.income  || 0),
-    Expense: Number(m.expense || 0),
-  }));
+  /* ── Bar chart data (chronological order) ── */
+  const barData = (data?.monthlyTrends ?? [])
+    .slice()
+    .reverse()
+    .map(m => ({
+      month:   m.month,
+      Income:  Number(m.income  ?? 0),
+      Expense: Number(m.expense ?? 0),
+    }));
 
-  const PIE_COLORS = ['#10b981', '#ef4444'];
-  const CAT_COLORS = ['#3b82f6','#8b5cf6','#f59e0b','#06b6d4','#f97316','#ec4899'];
-
-  const cardVariants = {
-    hidden: { opacity: 0, y: 30 },
-    show:   { opacity: 1, y: 0,  transition: { type: 'spring', stiffness: 200, damping: 22 } },
-  };
+  const hasPie    = pieData.length > 0;
+  const hasCat    = catData.length > 0;
+  const hasBar    = barData.length > 0;
+  const hasRecent = (data?.recentTransactions ?? []).length > 0;
 
   return (
-    <div className="p-6 lg:p-8 space-y-8 bg-animated min-h-full">
-      {/* ── Header ── */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
+    <div className="p-6 lg:p-8 space-y-7">
+
+      {/* ── HEADER ── */}
+      <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">
-            {isAdmin ? 'Platform Overview' : 'My Dashboard'}
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            {isAdmin ? 'Aggregated data across all users' : `Showing data for ${user?.name}`}
+          <h1 className="text-2xl font-black text-white">{isAdmin ? 'Platform Overview' : 'My Dashboard'}</h1>
+          <p className="text-slate-500 text-sm mt-0.5">
+            {isAdmin ? 'Viewing aggregated data for all users' : `Viewing data for ${user?.name}`}
           </p>
         </div>
-        <motion.button
-          whileHover={{ rotate: 180 }}
-          transition={{ duration: 0.4 }}
-          onClick={fetch}
-          className="p-3 glass rounded-xl text-slate-400 hover:text-white transition-colors"
-        >
-          <RefreshCcw size={18} />
+        <motion.button whileHover={{ rotate: 180 }} transition={{ duration: 0.35 }} onClick={fetchData}
+          className="p-2.5 glass text-slate-500 hover:text-white transition-colors rounded-xl">
+          <RefreshCcw size={16} />
         </motion.button>
       </motion.div>
 
-      {/* ── Summary Cards ── */}
-      <motion.div
-        variants={{ show: { transition: { staggerChildren: 0.1 } } }}
-        initial="hidden" animate="show"
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
-      >
-        {/* Balance */}
-        <motion.div variants={cardVariants}>
-          <TiltCard glowColor="rgba(59,130,246,0.4)" className="pulse-glow">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">Net Balance</p>
-                <p className={`text-3xl font-black ${balance >= 0 ? 'text-white' : 'text-red-400'}`}>{fmt(balance)}</p>
-                <p className="text-slate-500 text-xs mt-2">{isAdmin ? 'All users combined' : 'Your balance'}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-blue-500/20 text-blue-400">
-                <Wallet size={22} />
-              </div>
-            </div>
-          </TiltCard>
-        </motion.div>
-
-        {/* Income */}
-        <motion.div variants={cardVariants}>
-          <TiltCard glowColor="rgba(16,185,129,0.3)">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">Total Income</p>
-                <p className="text-3xl font-black text-emerald-400">{fmt(income)}</p>
-                <p className="text-emerald-500/60 text-xs mt-2 flex items-center gap-1">
-                  <ArrowUpRight size={12} /> positive cashflow
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-400">
-                <TrendingUp size={22} />
-              </div>
-            </div>
-          </TiltCard>
-        </motion.div>
-
-        {/* Expense */}
-        <motion.div variants={cardVariants}>
-          <TiltCard glowColor="rgba(239,68,68,0.3)">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">Total Expenses</p>
-                <p className="text-3xl font-black text-red-400">{fmt(expense)}</p>
-                <p className="text-red-500/60 text-xs mt-2 flex items-center gap-1">
-                  <ArrowDownRight size={12} /> outgoing spend
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-red-500/20 text-red-400">
-                <TrendingDown size={22} />
-              </div>
-            </div>
-          </TiltCard>
-        </motion.div>
+      {/* ── STAT CARDS ── */}
+      <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <StatCard
+          label={isAdmin ? 'Platform Balance' : 'Net Balance'}
+          value={currency(balance)}
+          sub={balance >= 0 ? '▲ Positive overall' : '▼ In the red'}
+          icon={Wallet}
+          iconBg={balance >= 0 ? EMERALD : ROSE}
+          valueColor={balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}
+        />
+        <StatCard
+          label="Total Income"
+          value={currency(income)}
+          sub="All inflow transactions"
+          icon={TrendingUp}
+          iconBg={EMERALD}
+          valueColor="text-emerald-400"
+        />
+        <StatCard
+          label="Total Expenses"
+          value={currency(expense)}
+          sub="All outflow transactions"
+          icon={TrendingDown}
+          iconBg={ROSE}
+          valueColor="text-rose-400"
+        />
       </motion.div>
 
-      {/* ── Charts ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Animated Pie Chart */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.3, type: 'spring' }}
-          className="glass p-6"
-        >
-          <h3 className="text-white font-bold text-lg mb-1">Income vs Expense</h3>
-          <p className="text-slate-500 text-xs mb-4">Your financial ratio at a glance</p>
-          <div style={{ height: 280 }}>
-            {pieData.length > 0 ? (
+      {/* ── CHARTS: PIE + BAR ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+
+        {/* PIE — Income vs Expense */}
+        <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }}
+          className="glass p-6">
+          <h3 className="text-white font-bold text-base mb-0.5">Income vs Expense</h3>
+          <p className="text-slate-500 text-xs mb-5">Spending ratio at a glance</p>
+
+          {hasPie ? (
+            /* KEY FIX: explicit pixel height on wrapper, NOT a % inside flexbox */
+            <div style={{ width: '100%', height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                   <Pie
                     data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={72}
-                    outerRadius={104}
-                    paddingAngle={4}
                     dataKey="value"
-                    labelLine={false}
-                    label={renderLabel}
-                    shape={<AnimatedPieSlice />}
+                    nameKey="name"
+                    cx="50%" cy="50%"
+                    innerRadius={70}
+                    outerRadius={100}
+                    paddingAngle={4}
+                    isAnimationActive={true}
+                    animationBegin={0}
+                    animationDuration={900}
+                    animationEasing="ease-out"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    labelLine={{ stroke: 'rgba(255,255,255,0.2)', strokeWidth: 1 }}
                   >
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i]} stroke="rgba(0,0,0,0.3)" strokeWidth={2} />
-                    ))}
+                    <Cell fill={EMERALD} />
+                    <Cell fill={ROSE} />
                   </Pie>
-                  <Tooltip
-                    contentStyle={{ background: '#161b22', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, color: '#e6edf3', fontSize: 13 }}
-                    formatter={(v) => fmt(v)}
+                  <Tooltip content={<ChartTooltip />} />
+                  <Legend
+                    iconType="circle"
+                    iconSize={8}
+                    formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-slate-600 text-sm">
-                No transaction data yet
-              </div>
-            )}
-          </div>
-
-          {/* Legend */}
-          <div className="flex gap-6 justify-center mt-2">
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" />Income
             </div>
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="w-3 h-3 rounded-full bg-red-500 inline-block" />Expense
+          ) : (
+            <div style={{ height: 260 }} className="flex items-center justify-center text-slate-700 text-sm">
+              No transaction data yet
             </div>
-          </div>
+          )}
         </motion.div>
 
-        {/* Bar Chart */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.4, type: 'spring' }}
-          className="glass p-6"
-        >
-          <h3 className="text-white font-bold text-lg mb-1">Monthly Trends</h3>
-          <p className="text-slate-500 text-xs mb-4">Income & expenses over time</p>
-          <div style={{ height: 280 }}>
-            {barData.length > 0 ? (
+        {/* BAR — Monthly Trends */}
+        <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }}
+          className="glass p-6">
+          <h3 className="text-white font-bold text-base mb-0.5">Monthly Trends</h3>
+          <p className="text-slate-500 text-xs mb-5">Income & expenses over time</p>
+
+          {hasBar ? (
+            <div style={{ width: '100%', height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="month" tick={{ fill: '#8b949e', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: '#8b949e', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{ background: '#161b22', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, color: '#e6edf3', fontSize: 13 }}
-                    formatter={(v) => fmt(v)}
+                <BarChart data={barData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }} barCategoryGap="30%">
+                  <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fill: '#475569', fontSize: 11 }}
+                    axisLine={false} tickLine={false}
                   />
-                  <Legend wrapperStyle={{ color: '#8b949e', fontSize: 12, paddingTop: 8 }} />
-                  <Bar dataKey="Income"  fill="#10b981" radius={[4,4,0,0]} />
-                  <Bar dataKey="Expense" fill="#ef4444" radius={[4,4,0,0]} />
+                  <YAxis
+                    tickFormatter={shortMoney}
+                    tick={{ fill: '#475569', fontSize: 11 }}
+                    axisLine={false} tickLine={false}
+                    width={50}
+                  />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                  <Legend iconType="circle" iconSize={8}
+                    formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>} />
+                  <Bar dataKey="Income"  name="Income"  fill={EMERALD} radius={[4,4,0,0]} maxBarSize={32} />
+                  <Bar dataKey="Expense" name="Expense" fill={ROSE}    radius={[4,4,0,0]} maxBarSize={32} />
                 </BarChart>
               </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-slate-600 text-sm">No monthly data yet</div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div style={{ height: 260 }} className="flex items-center justify-center text-slate-700 text-sm">
+              No monthly data yet
+            </div>
+          )}
         </motion.div>
       </div>
 
-      {/* ── Category Breakdown ── */}
-      {catData.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="glass p-6"
-        >
-          <h3 className="text-white font-bold text-lg mb-1">Expense Categories</h3>
-          <p className="text-slate-500 text-xs mb-4">Breakdown of where money is spent</p>
-          <div style={{ height: 240 }}>
+      {/* ── CATEGORY BREAKDOWN ── */}
+      {hasCat && (
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+          className="glass p-6">
+          <h3 className="text-white font-bold text-base mb-0.5">Expense by Category</h3>
+          <p className="text-slate-500 text-xs mb-5">Breakdown of spending categories</p>
+          <div style={{ width: '100%', height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={catData} dataKey="value" cx="50%" cy="50%" outerRadius={95} paddingAngle={3} shape={<AnimatedPieSlice />}>
-                  {catData.map((_, i) => <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />)}
+                <Pie
+                  data={catData} dataKey="value" nameKey="name"
+                  cx="50%" cy="50%" outerRadius={85}
+                  paddingAngle={3}
+                  isAnimationActive animationBegin={0} animationDuration={900}
+                  label={({ name, percent }) => percent > 0.04 ? `${name} ${(percent*100).toFixed(0)}%` : ''}
+                  labelLine={{ stroke: 'rgba(255,255,255,0.15)', strokeWidth: 1 }}
+                >
+                  {catData.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
                 </Pie>
-                <Tooltip
-                  contentStyle={{ background: '#161b22', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, color: '#e6edf3', fontSize: 13 }}
-                  formatter={(v) => fmt(v)}
-                />
-                <Legend wrapperStyle={{ color: '#8b949e', fontSize: 12 }} />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend iconType="circle" iconSize={8}
+                  formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>} />
               </PieChart>
             </ResponsiveContainer>
           </div>
         </motion.div>
       )}
 
-      {/* ── Recent Activity Feed ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.55 }}
-        className="glass p-6"
-      >
+      {/* ── RECENT ACTIVITY ── */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+        className="glass p-6">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h3 className="text-white font-bold text-lg">Recent Activity</h3>
+            <h3 className="text-white font-bold text-base">Recent Activity</h3>
             <p className="text-slate-500 text-xs">Latest transactions</p>
           </div>
-          <motion.button whileHover={{ rotate: 180 }} transition={{ duration: 0.4 }} onClick={fetch}
-            className="p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.08] transition-colors text-slate-400">
-            <RefreshCcw size={15} />
+          <motion.button whileHover={{ rotate: 180 }} transition={{ duration: 0.3 }} onClick={fetchData}
+            className="p-2 glass rounded-xl text-slate-600 hover:text-white transition-colors text-xs">
+            <RefreshCcw size={14} />
           </motion.button>
         </div>
 
-        <div className="space-y-1">
-          {(data.recentTransactions || []).length === 0 ? (
-            <p className="text-center text-slate-600 py-8 text-sm">No transactions yet</p>
-          ) : (
-            (data.recentTransactions || []).map((t, i) => (
+        {!hasRecent ? (
+          <p className="text-center text-slate-700 text-sm py-10">No recent transactions</p>
+        ) : (
+          <div className="space-y-1">
+            {data.recentTransactions.map((t, i) => (
               <motion.div
                 key={t.id}
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                whileHover={{ y: -2, backgroundColor: 'rgba(255,255,255,0.04)' }}
-                transition={{ delay: i * 0.05, type: 'spring', stiffness: 300, damping: 24 }}
-                className="flex items-center justify-between px-4 py-3 rounded-xl cursor-default border border-transparent hover:border-white/[0.06] transition-all"
+                whileHover={{ y: -1, backgroundColor: 'rgba(255,255,255,0.03)' }}
+                transition={{ delay: i * 0.04, type: 'spring', stiffness: 280, damping: 22 }}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl border border-transparent hover:border-white/[0.05] transition-all cursor-default"
               >
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white ${t.type === 'INCOME' ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
-                    {t.type === 'INCOME' ? <ArrowUpRight size={16} className="text-emerald-400" /> : <ArrowDownRight size={16} className="text-red-400" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-white">{t.category}</p>
-                    <p className="text-xs text-slate-500">{t.createdByName} · {t.date}</p>
-                  </div>
+                {/* Icon */}
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                  t.type === 'INCOME' ? 'bg-emerald-500/15' : 'bg-rose-500/15'}`}>
+                  {t.type === 'INCOME'
+                    ? <ArrowUpRight   size={16} className="text-emerald-400" />
+                    : <ArrowDownRight size={16} className="text-rose-400" />}
                 </div>
-                <p className={`font-bold text-sm ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {t.type === 'INCOME' ? '+' : '-'}{fmt(t.amount)}
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{t.category}</p>
+                  <p className="text-xs text-slate-600">{t.createdByName} · {t.date}</p>
+                </div>
+                {/* Amount */}
+                <p className={`text-sm font-bold shrink-0 ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {t.type === 'INCOME' ? '+' : '-'}{currency(t.amount)}
                 </p>
               </motion.div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </motion.div>
     </div>
   );
