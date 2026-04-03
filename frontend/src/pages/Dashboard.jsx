@@ -1,265 +1,372 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+import { Wallet, TrendingUp, TrendingDown, RefreshCcw, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import api from '../api';
-import { Wallet, TrendingUp, TrendingDown, RefreshCcw } from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, PieChart, Pie, Cell
-} from 'recharts';
 
-const PIE_COLORS = ['#10b981', '#ef4444']; // green = income, red = expense
-const BAR_COLORS = { income: '#10b981', expense: '#ef4444' };
-const CAT_COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#06b6d4', '#f97316'];
+const fmt = (n) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n || 0);
 
-const fmt = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/* ── 3D Tilt Card ── */
+function TiltCard({ children, className = '', glowColor = 'rgba(59,130,246,0.3)' }) {
+  const ref = useRef(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const rotateX = useTransform(y, [-0.5, 0.5], [6, -6]);
+  const rotateY = useTransform(x, [-0.5, 0.5], [-6, 6]);
 
-export default function Dashboard({ user }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const fetchData = () => {
-    setLoading(true);
-    setError(null);
-    api.get('/dashboard/summary')
-      .then(res => {
-        setData(res.data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('Dashboard load failed', err);
-        setError('Failed to load dashboard data.');
-        setLoading(false);
-      });
+  const handleMouse = (e) => {
+    const rect = ref.current.getBoundingClientRect();
+    x.set((e.clientX - rect.left) / rect.width - 0.5);
+    y.set((e.clientY - rect.top)  / rect.height - 0.5);
   };
-
-  useEffect(() => { fetchData(); }, []);
-
-  if (loading) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        {[1, 2, 3].map(i => (
-          <div key={i} className="h-32 rounded-2xl bg-slate-200 dark:bg-slate-700" />
-        ))}
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return <div className="p-8 text-center text-red-500">{error || 'No data available.'}</div>;
-  }
-
-  const incomeExpensePieData = [
-    { name: 'Income', value: Number(data.totalIncome || 0) },
-    { name: 'Expense', value: Number(data.totalExpense || 0) },
-  ];
-
-  const hasPieData = incomeExpensePieData.some(d => d.value > 0);
-  const hasBarData = data.monthlyTrends?.length > 0;
-
-  const barData = (data.monthlyTrends || [])
-    .slice()
-    .reverse()
-    .map(m => ({
-      month: m.month,
-      income: Number(m.income || 0),
-      expense: Number(m.expense || 0),
-    }));
-
-  const catData = (data.categoryTotals || []).map(c => ({
-    name: c.category,
-    value: Number(c.totalAmount || 0),
-  }));
-
-  const isAdmin = user?.role === 'ADMIN';
+  const reset = () => { x.set(0); y.set(0); };
 
   return (
-    <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="card bg-gradient-to-br from-blue-500 to-indigo-600 text-white border-0">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-blue-100 font-medium text-sm">
-                {isAdmin ? 'Platform Net Balance' : 'My Net Balance'}
-              </p>
-              <h3 className="text-3xl font-bold mt-1">{fmt(data.netBalance)}</h3>
-            </div>
-            <div className="bg-white/20 p-3 rounded-xl"><Wallet size={24} /></div>
-          </div>
-        </div>
+    <motion.div
+      ref={ref}
+      onMouseMove={handleMouse}
+      onMouseLeave={reset}
+      whileHover={{ scale: 1.02 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      style={{
+        rotateX, rotateY,
+        transformStyle: 'preserve-3d',
+        perspective: 800,
+        boxShadow: `0 0 0 1px rgba(255,255,255,0.06), 0 20px 40px -10px rgba(0,0,0,0.4), 0 0 60px -15px ${glowColor}`,
+      }}
+      className={`glass p-6 cursor-default ${className}`}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
-        <div className="card glass-panel">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="opacity-70 font-medium text-sm">{isAdmin ? 'Total Platform Income' : 'My Total Income'}</p>
-              <h3 className="text-2xl font-bold mt-1 text-[var(--success)]">{fmt(data.totalIncome)}</h3>
-            </div>
-            <div className="bg-green-100 dark:bg-green-900/30 text-[var(--success)] p-3 rounded-xl">
-              <TrendingUp size={24} />
-            </div>
-          </div>
-        </div>
+/* ── Custom Pie Label ── */
+const RADIAN = Math.PI / 180;
+const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
+  if (percent < 0.04) return null;
+  const r = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const px = cx + (r + 25) * Math.cos(-midAngle * RADIAN);
+  const py = cy + (r + 25) * Math.sin(-midAngle * RADIAN);
+  return (
+    <text x={px} y={py} fill="#e6edf3" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
+      {name} {(percent * 100).toFixed(0)}%
+    </text>
+  );
+};
 
-        <div className="card glass-panel">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="opacity-70 font-medium text-sm">{isAdmin ? 'Total Platform Expenses' : 'My Total Expenses'}</p>
-              <h3 className="text-2xl font-bold mt-1 text-[var(--danger)]">{fmt(data.totalExpense)}</h3>
-            </div>
-            <div className="bg-red-100 dark:bg-red-900/30 text-[var(--danger)] p-3 rounded-xl">
-              <TrendingDown size={24} />
-            </div>
-          </div>
-        </div>
+/* ── Animated Pie Shape ── */
+function AnimatedPieSlice(props) {
+  return (
+    <motion.path
+      {...props}
+      initial={{ scale: 0, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      whileHover={{ scale: 1.05 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+      style={{ transformOrigin: 'center', cursor: 'pointer' }}
+    />
+  );
+}
+
+export default function Dashboard({ user }) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+
+  const fetch = () => {
+    setLoading(true);
+    api.get('/dashboard/summary')
+      .then(r  => { setData(r.data); setLoading(false); })
+      .catch(() => { setError('Failed to load.'); setLoading(false); });
+  };
+  useEffect(fetch, []);
+
+  if (loading)
+    return (
+      <div className="flex items-center justify-center h-full">
+        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+          className="w-10 h-10 rounded-full border-4 border-blue-500 border-t-transparent" />
       </div>
+    );
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Bar Chart – Monthly Trends */}
-        <div className="card glass-panel">
-          <h3 className="text-lg font-bold mb-4">Monthly Trends</h3>
-          <div style={{ width: '100%', height: 280 }}>
-            {hasBarData ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--secondary)', borderRadius: '8px' }}
-                    formatter={(v) => fmt(v)}
-                  />
-                  <Legend />
-                  <Bar dataKey="income" name="Income" fill={BAR_COLORS.income} radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="expense" name="Expense" fill={BAR_COLORS.expense} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center opacity-40 text-sm">
-                No monthly data yet
-              </div>
-            )}
-          </div>
+  if (error || !data)
+    return <p className="text-center text-red-400 mt-20">{error || 'No data.'}</p>;
+
+  const income  = Number(data.totalIncome  || 0);
+  const expense = Number(data.totalExpense || 0);
+  const balance = Number(data.netBalance   || 0);
+  const isAdmin = user?.role === 'ADMIN';
+
+  const pieData = [
+    { name: 'Income',  value: income  },
+    { name: 'Expense', value: expense },
+  ].filter(d => d.value > 0);
+
+  const catData = (data.categoryTotals || []).map(c => ({ name: c.category, value: Number(c.totalAmount || 0) }));
+
+  const barData = (data.monthlyTrends || []).slice().reverse().map(m => ({
+    month:   m.month,
+    Income:  Number(m.income  || 0),
+    Expense: Number(m.expense || 0),
+  }));
+
+  const PIE_COLORS = ['#10b981', '#ef4444'];
+  const CAT_COLORS = ['#3b82f6','#8b5cf6','#f59e0b','#06b6d4','#f97316','#ec4899'];
+
+  const cardVariants = {
+    hidden: { opacity: 0, y: 30 },
+    show:   { opacity: 1, y: 0,  transition: { type: 'spring', stiffness: 200, damping: 22 } },
+  };
+
+  return (
+    <div className="p-6 lg:p-8 space-y-8 bg-animated min-h-full">
+      {/* ── Header ── */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between"
+      >
+        <div>
+          <h1 className="text-3xl font-bold text-white">
+            {isAdmin ? 'Platform Overview' : 'My Dashboard'}
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            {isAdmin ? 'Aggregated data across all users' : `Showing data for ${user?.name}`}
+          </p>
         </div>
+        <motion.button
+          whileHover={{ rotate: 180 }}
+          transition={{ duration: 0.4 }}
+          onClick={fetch}
+          className="p-3 glass rounded-xl text-slate-400 hover:text-white transition-colors"
+        >
+          <RefreshCcw size={18} />
+        </motion.button>
+      </motion.div>
 
-        {/* Pie Chart – Income vs Expense */}
-        <div className="card glass-panel">
-          <h3 className="text-lg font-bold mb-4">Income vs Expense</h3>
-          <div style={{ width: '100%', height: 280 }}>
-            {hasPieData ? (
+      {/* ── Summary Cards ── */}
+      <motion.div
+        variants={{ show: { transition: { staggerChildren: 0.1 } } }}
+        initial="hidden" animate="show"
+        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+      >
+        {/* Balance */}
+        <motion.div variants={cardVariants}>
+          <TiltCard glowColor="rgba(59,130,246,0.4)" className="pulse-glow">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">Net Balance</p>
+                <p className={`text-3xl font-black ${balance >= 0 ? 'text-white' : 'text-red-400'}`}>{fmt(balance)}</p>
+                <p className="text-slate-500 text-xs mt-2">{isAdmin ? 'All users combined' : 'Your balance'}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-blue-500/20 text-blue-400">
+                <Wallet size={22} />
+              </div>
+            </div>
+          </TiltCard>
+        </motion.div>
+
+        {/* Income */}
+        <motion.div variants={cardVariants}>
+          <TiltCard glowColor="rgba(16,185,129,0.3)">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">Total Income</p>
+                <p className="text-3xl font-black text-emerald-400">{fmt(income)}</p>
+                <p className="text-emerald-500/60 text-xs mt-2 flex items-center gap-1">
+                  <ArrowUpRight size={12} /> positive cashflow
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-400">
+                <TrendingUp size={22} />
+              </div>
+            </div>
+          </TiltCard>
+        </motion.div>
+
+        {/* Expense */}
+        <motion.div variants={cardVariants}>
+          <TiltCard glowColor="rgba(239,68,68,0.3)">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">Total Expenses</p>
+                <p className="text-3xl font-black text-red-400">{fmt(expense)}</p>
+                <p className="text-red-500/60 text-xs mt-2 flex items-center gap-1">
+                  <ArrowDownRight size={12} /> outgoing spend
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-red-500/20 text-red-400">
+                <TrendingDown size={22} />
+              </div>
+            </div>
+          </TiltCard>
+        </motion.div>
+      </motion.div>
+
+      {/* ── Charts ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Animated Pie Chart */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3, type: 'spring' }}
+          className="glass p-6"
+        >
+          <h3 className="text-white font-bold text-lg mb-1">Income vs Expense</h3>
+          <p className="text-slate-500 text-xs mb-4">Your financial ratio at a glance</p>
+          <div style={{ height: 280 }}>
+            {pieData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={incomeExpensePieData}
+                    data={pieData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={70}
-                    outerRadius={100}
+                    innerRadius={72}
+                    outerRadius={104}
                     paddingAngle={4}
                     dataKey="value"
+                    labelLine={false}
+                    label={renderLabel}
+                    shape={<AnimatedPieSlice />}
                   >
-                    {incomeExpensePieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index]} />
+                    {pieData.map((_, i) => (
+                      <Cell key={i} fill={PIE_COLORS[i]} stroke="rgba(0,0,0,0.3)" strokeWidth={2} />
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--secondary)', borderRadius: '8px' }}
-                    formatter={(v, name) => [fmt(v), name]}
+                    contentStyle={{ background: '#161b22', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, color: '#e6edf3', fontSize: 13 }}
+                    formatter={(v) => fmt(v)}
                   />
-                  <Legend />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex h-full items-center justify-center opacity-40 text-sm">
-                No transactions recorded yet
+              <div className="h-full flex items-center justify-center text-slate-600 text-sm">
+                No transaction data yet
               </div>
             )}
           </div>
-        </div>
+
+          {/* Legend */}
+          <div className="flex gap-6 justify-center mt-2">
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" />Income
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <span className="w-3 h-3 rounded-full bg-red-500 inline-block" />Expense
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Bar Chart */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.4, type: 'spring' }}
+          className="glass p-6"
+        >
+          <h3 className="text-white font-bold text-lg mb-1">Monthly Trends</h3>
+          <p className="text-slate-500 text-xs mb-4">Income & expenses over time</p>
+          <div style={{ height: 280 }}>
+            {barData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="month" tick={{ fill: '#8b949e', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#8b949e', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ background: '#161b22', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, color: '#e6edf3', fontSize: 13 }}
+                    formatter={(v) => fmt(v)}
+                  />
+                  <Legend wrapperStyle={{ color: '#8b949e', fontSize: 12, paddingTop: 8 }} />
+                  <Bar dataKey="Income"  fill="#10b981" radius={[4,4,0,0]} />
+                  <Bar dataKey="Expense" fill="#ef4444" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-600 text-sm">No monthly data yet</div>
+            )}
+          </div>
+        </motion.div>
       </div>
 
-      {/* Expense by Category — only if there is data */}
+      {/* ── Category Breakdown ── */}
       {catData.length > 0 && (
-        <div className="card glass-panel">
-          <h3 className="text-lg font-bold mb-4">Expenses by Category</h3>
-          <div style={{ width: '100%', height: 260 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="glass p-6"
+        >
+          <h3 className="text-white font-bold text-lg mb-1">Expense Categories</h3>
+          <p className="text-slate-500 text-xs mb-4">Breakdown of where money is spent</p>
+          <div style={{ height: 240 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={catData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {catData.map((_, i) => (
-                    <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
-                  ))}
+                <Pie data={catData} dataKey="value" cx="50%" cy="50%" outerRadius={95} paddingAngle={3} shape={<AnimatedPieSlice />}>
+                  {catData.map((_, i) => <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />)}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--secondary)', borderRadius: '8px' }}
-                  formatter={(v, name) => [fmt(v), name]}
+                  contentStyle={{ background: '#161b22', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, color: '#e6edf3', fontSize: 13 }}
+                  formatter={(v) => fmt(v)}
                 />
-                <Legend />
+                <Legend wrapperStyle={{ color: '#8b949e', fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* Recent Transactions */}
-      <div className="card glass-panel">
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="text-lg font-bold">Recent Transactions</h3>
-          <button
-            onClick={fetchData}
-            className="p-2 hover:bg-[var(--secondary)] rounded-full transition-colors"
-            title="Refresh"
-          >
-            <RefreshCcw size={18} />
-          </button>
+      {/* ── Recent Activity Feed ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.55 }}
+        className="glass p-6"
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h3 className="text-white font-bold text-lg">Recent Activity</h3>
+            <p className="text-slate-500 text-xs">Latest transactions</p>
+          </div>
+          <motion.button whileHover={{ rotate: 180 }} transition={{ duration: 0.4 }} onClick={fetch}
+            className="p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.08] transition-colors text-slate-400">
+            <RefreshCcw size={15} />
+          </motion.button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-[var(--secondary)] text-sm opacity-60">
-                <th className="pb-3 px-3 font-medium">Date</th>
-                <th className="pb-3 px-3 font-medium">Category</th>
-                <th className="pb-3 px-3 font-medium">User</th>
-                <th className="pb-3 px-3 font-medium">Notes</th>
-                <th className="pb-3 px-3 font-medium text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data.recentTransactions || []).length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="py-8 text-center opacity-40">No transactions yet</td>
-                </tr>
-              ) : (
-                data.recentTransactions.map(t => (
-                  <tr
-                    key={t.id}
-                    className="border-b border-[var(--secondary)]/50 hover:bg-[var(--secondary)]/30 transition-colors"
-                  >
-                    <td className="py-3 px-3 text-sm">{t.date}</td>
-                    <td className="py-3 px-3">
-                      <span className="bg-[var(--secondary)] px-2 py-0.5 rounded-full text-xs font-semibold">
-                        {t.category}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-sm opacity-70">{t.createdByName}</td>
-                    <td className="py-3 px-3 text-sm opacity-70 max-w-xs truncate">{t.notes || '—'}</td>
-                    <td className={`py-3 px-3 text-right font-bold ${t.type === 'INCOME' ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
-                      {t.type === 'INCOME' ? '+' : '-'}{fmt(t.amount)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+
+        <div className="space-y-1">
+          {(data.recentTransactions || []).length === 0 ? (
+            <p className="text-center text-slate-600 py-8 text-sm">No transactions yet</p>
+          ) : (
+            (data.recentTransactions || []).map((t, i) => (
+              <motion.div
+                key={t.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileHover={{ y: -2, backgroundColor: 'rgba(255,255,255,0.04)' }}
+                transition={{ delay: i * 0.05, type: 'spring', stiffness: 300, damping: 24 }}
+                className="flex items-center justify-between px-4 py-3 rounded-xl cursor-default border border-transparent hover:border-white/[0.06] transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white ${t.type === 'INCOME' ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
+                    {t.type === 'INCOME' ? <ArrowUpRight size={16} className="text-emerald-400" /> : <ArrowDownRight size={16} className="text-red-400" />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{t.category}</p>
+                    <p className="text-xs text-slate-500">{t.createdByName} · {t.date}</p>
+                  </div>
+                </div>
+                <p className={`font-bold text-sm ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {t.type === 'INCOME' ? '+' : '-'}{fmt(t.amount)}
+                </p>
+              </motion.div>
+            ))
+          )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

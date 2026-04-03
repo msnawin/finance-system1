@@ -5,26 +5,41 @@ import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Users from './pages/Users';
 import Sidebar from './components/Sidebar';
+import api from './api';
 
 function App() {
   const [user, setUser] = useState(null);
+  const [checking, setChecking] = useState(true); // prevents flash of login page
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
-    const userRole = localStorage.getItem('userRole');
-    const userName = localStorage.getItem('userName');
-    
-    if (token && userId && userRole) {
-      setUser({ id: userId, role: userRole, name: userName });
+    if (!token) {
+      setChecking(false);
+      return;
     }
+    // Validate token against backend — if it fails, clear and show login
+    api.get('/dashboard/summary')
+      .then(() => {
+        const userId   = localStorage.getItem('userId');
+        const userRole = localStorage.getItem('userRole');
+        const userName = localStorage.getItem('userName');
+        if (userId && userRole) {
+          setUser({ id: userId, role: userRole, name: userName });
+        } else {
+          localStorage.clear();
+        }
+      })
+      .catch(() => {
+        localStorage.clear(); // expired / invalid token → force login
+      })
+      .finally(() => setChecking(false));
   }, []);
 
-  const handleLogin = (selectedUser) => {
-    localStorage.setItem('userId', selectedUser.id);
-    localStorage.setItem('userRole', selectedUser.role);
-    localStorage.setItem('userName', selectedUser.name);
-    setUser(selectedUser);
+  const handleLogin = (loggedInUser) => {
+    localStorage.setItem('userId',   loggedInUser.id);
+    localStorage.setItem('userRole', loggedInUser.role);
+    localStorage.setItem('userName', loggedInUser.name);
+    setUser(loggedInUser);
   };
 
   const handleLogout = () => {
@@ -32,24 +47,25 @@ function App() {
     setUser(null);
   };
 
+  if (checking) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#0d1117]">
+        <div className="w-10 h-10 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
   if (!user) {
     return <Login onLogin={handleLogin} />;
   }
 
   return (
     <Router>
-      <div className="flex h-screen bg-[var(--background)]">
+      <div className="flex h-screen bg-[#0d1117] text-white">
         <Sidebar user={user} onLogout={handleLogout} />
-        <div className="flex-1 overflow-x-hidden overflow-y-auto w-full p-6">
-          <header className="mb-8 flex justify-between items-center">
-            <h1 className="text-2xl font-bold">Finance Dashboard</h1>
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium">Welcome, {user.name} ({user.role})</span>
-            </div>
-          </header>
-          
+        <div className="flex-1 overflow-x-hidden overflow-y-auto">
           <Routes>
-            <Route path="/" element={<Dashboard user={user} />} />
+            <Route path="/"             element={<Dashboard    user={user} />} />
             <Route path="/transactions" element={<Transactions user={user} />} />
             {user.role === 'ADMIN' && (
               <Route path="/users" element={<Users />} />

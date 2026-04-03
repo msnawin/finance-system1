@@ -1,87 +1,71 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: #f1f5f9;
-    --foreground: #0f172a;
-    --card: #ffffff;
-    --card-foreground: #0f172a;
-    --primary: #3b82f6;
-    --primary-foreground: #ffffff;
-    --secondary: #e2e8f0;
-    --secondary-foreground: #1e293b;
-    --accent: #8b5cf6;
-    --success: #10b981;
-    --danger: #ef4444;
-  }
-
-  .dark {
-    --background: #0f172a;
-    --foreground: #f8fafc;
-    --card: #1e293b;
-    --card-foreground: #f8fafc;
-    --primary: #60a5fa;
-    --primary-foreground: #0f172a;
-    --secondary: #334155;
-    --secondary-foreground: #f8fafc;
-    --accent: #a78bfa;
-    --success: #34d399;
-    --danger: #f87171;
-  }
+/* ─── Design tokens ─── */
+:root {
+  --bg:           #0d1117;
+  --bg-2:         #161b22;
+  --card:         rgba(22, 27, 34, 0.7);
+  --card-border:  rgba(255,255,255,0.08);
+  --primary:      #3b82f6;
+  --primary-glow: rgba(59,130,246,0.35);
+  --success:      #10b981;
+  --success-glow: rgba(16,185,129,0.3);
+  --danger:       #ef4444;
+  --danger-glow:  rgba(239,68,68,0.3);
+  --foreground:   #e6edf3;
+  --muted:        #8b949e;
 }
+
+* { box-sizing: border-box; }
 
 body {
   font-family: 'Inter', sans-serif;
-  background-color: var(--background);
+  background-color: var(--bg);
   color: var(--foreground);
-  transition: background-color 0.3s ease, color 0.3s ease;
+  margin: 0;
 }
 
-.glass-panel {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+/* ─── Glassmorphism card ─── */
+.glass {
+  background: var(--card);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
 }
 
-.dark .glass-panel {
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+/* ─── Animated gradient background ─── */
+@keyframes gradientShift {
+  0%   { background-position: 0%   50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0%   50%; }
 }
 
-.card {
-  background-color: var(--card);
-  color: var(--card-foreground);
-  border-radius: 1.5rem;
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15), 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  padding: 2rem;
+.bg-animated {
+  background: linear-gradient(135deg, #0d1117 0%, #0f1923 40%, #0e1628 70%, #0d1117 100%);
+  background-size: 400% 400%;
+  animation: gradientShift 12s ease infinite;
 }
 
-/* Premium Animations */
-@keyframes gradient-xy {
-  0%, 100% {
-    background-size: 400% 400%;
-    background-position: left center;
-  }
-  50% {
-    background-size: 200% 200%;
-    background-position: right center;
-  }
+/* ─── Pulse glow on balance card ─── */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 20px 0 var(--primary-glow); }
+  50%       { box-shadow: 0 0 40px 8px var(--primary-glow); }
 }
+.pulse-glow { animation: pulseGlow 3s ease-in-out infinite; }
 
-.animate-gradient-xy {
-  animation: gradient-xy 15s ease infinite;
-}
-
+/* ─── Float orb ─── */
 @keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-20px); }
-  100% { transform: translateY(0px); }
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-24px); }
 }
+.animate-float { animation: float 7s ease-in-out infinite; }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
