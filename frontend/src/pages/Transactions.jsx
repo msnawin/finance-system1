@@ -22,7 +22,7 @@ export default function Transactions({ user }) {
   const [filters,   setFilters]   = useState({ type: '', category: '', startDate: '', endDate: '' });
 
   const isAdmin   = user?.role === 'ADMIN';
-  const canCreate = isAdmin || user?.role === 'ANALYST';
+  const canCreate = isAdmin;
 
   /* ── Load transactions ── */
   const load = useCallback(() => {

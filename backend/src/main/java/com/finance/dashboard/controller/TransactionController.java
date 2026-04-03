@@ -31,26 +31,18 @@ public class TransactionController {
 
     /**
      * Create a transaction.
-     * - ADMIN: can assign to any user via dto.targetUserId; if not provided, assigns to self.
-     * - ANALYST: creates transaction linked to themselves.
-     * - VIEWER: not allowed.
+     * - ADMIN only: can create and assign transactions to any user via dto.targetUserId.
+     * - ANALYST, VIEWER: not allowed.
      */
     @PostMapping
     public ResponseEntity<TransactionDto> createTransaction(@Valid @RequestBody TransactionDto dto) {
         User caller = getAuthenticatedUser();
-        if (caller.getRole() == Role.VIEWER) {
-            throw new UnauthorizedException("Viewers cannot create transactions");
+        if (caller.getRole() != Role.ADMIN) {
+            throw new UnauthorizedException("Only admins can create transactions");
         }
 
-        // Determine the owner of the transaction
-        Long ownerId;
-        if (caller.getRole() == Role.ADMIN && dto.getTargetUserId() != null) {
-            // Admin explicitly assigned to another user
-            ownerId = dto.getTargetUserId();
-        } else {
-            // Analyst or Admin without explicit target → self
-            ownerId = caller.getId();
-        }
+        // Admin can assign to a specific user, or defaults to self
+        Long ownerId = (dto.getTargetUserId() != null) ? dto.getTargetUserId() : caller.getId();
 
         return new ResponseEntity<>(transactionService.createTransaction(dto, ownerId), HttpStatus.CREATED);
     }
