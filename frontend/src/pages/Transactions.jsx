@@ -1,207 +1,194 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, X, Filter } from 'lucide-react';
+import { Plus, X, Search, Calendar, ChevronRight } from 'lucide-react';
 import api from '../api';
 
 const currency = (n) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n ?? 0);
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n ?? 0);
 
-const EMPTY = { amount: '', type: 'EXPENSE', category: '', date: '', notes: '', targetUserId: '' };
-
-const inputCls = 'w-full px-4 py-3 rounded-xl text-sm text-white placeholder-slate-600 outline-none transition-all bg-white/[0.04] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.06]';
-const labelCls = 'block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5';
-
-const fadeUp = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 220, damping: 22 } } };
+/* ─── Premium Modal ───────────────────────── */
+function StandardModal({ isOpen, onClose, title, children }) {
+  if (!isOpen) return null;
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.98, y: 10 }}
+          transition={{ type: 'tween', ease: 'easeOut', duration: 0.25 }}
+          className="relative w-full max-w-lg bg-[#0a0a0a] border border-[#222] rounded-xl shadow-2xl overflow-hidden"
+        >
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#222]">
+            <h3 className="text-[15px] font-semibold text-white">{title}</h3>
+            <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="p-6">
+            {children}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 
 export default function Transactions({ user }) {
-  const [rows,      setRows]      = useState([]);
-  const [users,     setUsers]     = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [form,      setForm]      = useState(EMPTY);
-  const [filters,   setFilters]   = useState({ type: '', category: '', startDate: '', endDate: '' });
+  const [txs, setTxs]         = useState([]);
+  const [users, setUsers]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
 
-  const isAdmin   = user?.role === 'ADMIN';
-  const canCreate = isAdmin;
+  const [isModalOpen, setModalOpen] = useState(false);
+  const [formData, setFormData]     = useState({ amount: '', type: 'EXPENSE', category: '', description: '', userId: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  /* ── Load transactions ── */
-  const load = useCallback(() => {
+  const isAdmin = user?.role === 'ADMIN';
+
+  const fetchData = useCallback(() => {
     setLoading(true);
-    const p = {};
-    if (filters.type)      p.type      = filters.type;
-    if (filters.category)  p.category  = filters.category;
-    if (filters.startDate) p.startDate = filters.startDate;
-    if (filters.endDate)   p.endDate   = filters.endDate;
-    api.get('/transactions', { params: p })
-      .then(r  => setRows(r.data.content ?? []))
-      .catch(()  => {})
+    const reqs = [api.get('/transactions')];
+    if (isAdmin) reqs.push(api.get('/users'));
+
+    Promise.all(reqs)
+      .then((res) => {
+        setTxs(res[0].data.content || res[0].data);
+        if (isAdmin && res[1]) setUsers(res[1].data);
+        setError(null);
+      })
+      .catch((err) => {
+        setError(err.response?.data?.message || 'Failed to load data.');
+      })
       .finally(() => setLoading(false));
-  }, [filters]);
+  }, [isAdmin]);
 
-  useEffect(() => {
-    load();
-    if (isAdmin) api.get('/users').then(r => setUsers(r.data ?? [])).catch(() => {});
-  }, []); // eslint-disable-line
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  useEffect(() => { load(); }, [load]);
-
-  /* ── Submit ── */
-  const submit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const payload = {
-      amount:   parseFloat(form.amount),
-      type:     form.type,
-      category: form.category,
-      date:     form.date,
-      notes:    form.notes,
-      ...(isAdmin && form.targetUserId ? { targetUserId: Number(form.targetUserId) } : {}),
-    };
-    api.post('/transactions', payload)
-      .then(() => { setShowModal(false); setForm(EMPTY); load(); })
-      .catch(err => alert('Error: ' + (err.response?.data?.message ?? err.message)));
+    setSubmitting(true);
+    try {
+      const payload = {
+        ...formData,
+        amount: Number(formData.amount),
+        date: new Date().toISOString().split('T')[0],
+        notes: formData.description,
+        targetUserId: isAdmin && formData.userId ? Number(formData.userId) : undefined
+      };
+      await api.post('/transactions', payload);
+      setModalOpen(false);
+      setFormData({ amount: '', type: 'EXPENSE', category: '', description: '', userId: '' });
+      fetchData();
+    } catch {
+      alert('Failed to save transaction.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const del = (id) => {
-    if (!window.confirm('Delete this transaction?')) return;
-    api.delete(`/transactions/${id}`).then(load).catch(() => alert('Delete failed'));
-  };
+  const filteredTxs = txs.filter(t => 
+    (t.category || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (t.notes || t.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const clearFilters = () => setFilters({ type: '', category: '', startDate: '', endDate: '' });
+  const inputCls = "w-full px-4 py-2.5 rounded-lg bg-[#111] border border-[#222] text-sm text-white outline-none focus:border-[#0A84FF] transition-colors placeholder-slate-600";
+  const selectCls = "w-full px-4 py-2.5 rounded-lg bg-[#111] border border-[#222] text-sm text-white outline-none focus:border-[#0A84FF] transition-colors appearance-none";
+
+  if (loading) return (
+    <div className="flex h-full min-h-screen items-center justify-center">
+      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+        className="w-8 h-8 rounded-full border-2 border-slate-700 border-t-white" />
+    </div>
+  );
+
+  if (error) return <div className="p-8 text-rose-500">{error}</div>;
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-6 lg:p-10 max-w-7xl mx-auto min-h-screen flex flex-col">
 
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -14 }} animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between">
+      {/* HEADER */}
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-black text-white">Transactions</h1>
-          <p className="text-slate-500 text-sm mt-0.5">
-            {isAdmin ? 'All system transactions' : 'Your personal transactions'}
-          </p>
+          <h1 className="text-[26px] font-bold text-white tracking-tight">Ledger</h1>
+          <p className="text-slate-500 text-[13px] mt-1 font-medium">Your chronological transaction history.</p>
         </div>
-        {canCreate && (
-          <motion.button
-            onClick={() => setShowModal(true)}
-            whileHover={{ scale: 1.04, boxShadow: '0 0 30px rgba(59,130,246,0.45)' }}
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 18 }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white"
-            style={{ background: 'linear-gradient(135deg,#3b82f6,#6366f1)', boxShadow: '0 4px 18px rgba(59,130,246,0.25)' }}
-          >
-            <Plus size={15} /> Add Transaction
-          </motion.button>
-        )}
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text" placeholder="Search activity..."
+              value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+              className="w-64 pl-9 pr-4 py-2 rounded-lg bg-[#111] border border-[#222] text-[13px] text-white outline-none focus:border-[#0A84FF] transition-colors placeholder-slate-600"
+            />
+          </div>
+          {isAdmin && (
+            <button
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0A84FF] text-white text-[13px] font-semibold hover:bg-[#0070E0] transition-colors"
+            >
+              <Plus size={14} /> New Record
+            </button>
+          )}
+        </div>
       </motion.div>
 
-      {/* Filters */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
-        className="glass p-4 flex flex-wrap gap-3 items-end">
-        <Filter size={14} className="text-slate-600 self-center mb-1 shrink-0" />
-
-        <div>
-          <label className={labelCls}>Type</label>
-          <select value={filters.type} onChange={e => setFilters(f => ({ ...f, type: e.target.value }))}
-            className="px-3 py-2 rounded-xl text-xs bg-white/[0.04] border border-white/[0.06] text-white outline-none w-32">
-            <option value="" className="bg-slate-900">All Types</option>
-            <option value="INCOME"  className="bg-slate-900">Income</option>
-            <option value="EXPENSE" className="bg-slate-900">Expense</option>
-          </select>
-        </div>
-
-        <div>
-          <label className={labelCls}>Category</label>
-          <input placeholder="e.g. Rent" value={filters.category}
-            onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}
-            className="px-3 py-2 rounded-xl text-xs bg-white/[0.04] border border-white/[0.06] text-white placeholder-slate-600 outline-none w-32" />
-        </div>
-
-        <div>
-          <label className={labelCls}>From</label>
-          <input type="date" value={filters.startDate}
-            onChange={e => setFilters(f => ({ ...f, startDate: e.target.value }))}
-            className="px-3 py-2 rounded-xl text-xs bg-white/[0.04] border border-white/[0.06] text-white outline-none" />
-        </div>
-
-        <div>
-          <label className={labelCls}>To</label>
-          <input type="date" value={filters.endDate}
-            onChange={e => setFilters(f => ({ ...f, endDate: e.target.value }))}
-            className="px-3 py-2 rounded-xl text-xs bg-white/[0.04] border border-white/[0.06] text-white outline-none" />
-        </div>
-
-        <button onClick={clearFilters}
-          className="px-4 py-2 rounded-xl text-xs text-slate-600 hover:text-white hover:bg-white/[0.04] border border-transparent transition-all">
-          Clear
-        </button>
-      </motion.div>
-
-      {/* Table */}
-      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-        className="glass overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center">
-            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.9, ease: 'linear' }}
-              className="w-7 h-7 rounded-full border-2 border-blue-500 border-t-transparent mx-auto" />
+      {/* DATA GRID */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4 }} className="flex-1 glass-panel p-0 overflow-hidden flex flex-col">
+        {filteredTxs.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-500 py-20">
+            <p className="text-[13px] font-medium">No transactions found.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left whitespace-nowrap">
               <thead>
-                <tr className="border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                  {['Date','Type','Category','Amount','Belongs To','Notes', isAdmin && 'Actions']
-                    .filter(Boolean).map(h => (
-                    <th key={h} className="py-4 px-5 text-left text-[10px] font-bold uppercase tracking-widest text-slate-600">
-                      {h}
-                    </th>
-                  ))}
+                <tr className="border-b border-[#222] bg-[#0a0a0a]">
+                  <th className="px-6 py-3.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Details</th>
+                  <th className="px-6 py-3.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+                  {isAdmin && <th className="px-6 py-3.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">User</th>}
+                  <th className="px-6 py-3.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider text-right">Amount</th>
                 </tr>
               </thead>
-              <tbody>
-                <AnimatePresence initial={false}>
-                  {rows.length === 0 ? (
-                    <motion.tr key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                      <td colSpan={isAdmin ? 7 : 6} className="py-16 text-center text-slate-700 text-sm">
-                        No transactions found.
-                      </td>
-                    </motion.tr>
-                  ) : rows.map((t, i) => (
+              <tbody className="divide-y divide-[#222]">
+                <AnimatePresence>
+                  {filteredTxs.map((t, index) => (
                     <motion.tr
                       key={t.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: -24, height: 0 }}
-                      transition={{ delay: i * 0.025, type: 'spring', stiffness: 240, damping: 22 }}
-                      whileHover={{ backgroundColor: 'rgba(255,255,255,0.025)' }}
-                      className="border-b last:border-0"
-                      style={{ borderColor: 'rgba(255,255,255,0.04)' }}
+                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.3) }}
+                      className="hover:bg-[#111] transition-colors group cursor-default"
                     >
-                      <td className="py-3.5 px-5 text-sm text-slate-400">{t.date}</td>
-                      <td className="py-3.5 px-5">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-lg text-[11px] font-bold ${
-                          t.type === 'INCOME'
-                            ? 'bg-emerald-500/15 text-emerald-400'
-                            : 'bg-rose-500/15 text-rose-400'
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2 text-[13px] text-slate-400 font-medium">
+                          <Calendar size={14} className="opacity-50" /> {t.date}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-[13px] font-semibold text-white truncate max-w-[200px]">{t.category}</p>
+                        <p className="text-[11px] text-slate-500 truncate max-w-[200px] mt-0.5">{t.notes || t.description || 'No description'}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+                          t.type === 'INCOME' ? 'text-[#30D158] border-[#30D158]/30 bg-[#30D158]/10' : 'text-[#FF453A] border-[#FF453A]/30 bg-[#FF453A]/10'
                         }`}>
                           {t.type}
                         </span>
                       </td>
-                      <td className="py-3.5 px-5 text-sm font-medium text-white">{t.category}</td>
-                      <td className={`py-3.5 px-5 text-sm font-bold text-right ${
-                        t.type === 'INCOME' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {t.type === 'INCOME' ? '+' : '-'}{currency(t.amount)}
-                      </td>
-                      <td className="py-3.5 px-5 text-sm text-slate-500">{t.createdByName ?? '—'}</td>
-                      <td className="py-3.5 px-5 text-sm text-slate-600 max-w-[160px] truncate">{t.notes || '—'}</td>
                       {isAdmin && (
-                        <td className="py-3.5 px-5">
-                          <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
-                            onClick={() => del(t.id)}
-                            className="p-1.5 rounded-lg text-slate-700 hover:text-rose-400 hover:bg-rose-500/10 transition-colors">
-                            <Trash2 size={14} />
-                          </motion.button>
+                        <td className="px-6 py-4 text-[13px] text-slate-300">
+                          {t.createdByName}
                         </td>
                       )}
+                      <td className="px-6 py-4 text-right">
+                        <p className={`text-[14px] font-semibold ${t.type === 'INCOME' ? 'text-[#30D158]' : 'text-white'}`}>
+                          {t.type === 'INCOME' ? '+' : '-'}{currency(t.amount)}
+                        </p>
+                      </td>
                     </motion.tr>
                   ))}
                 </AnimatePresence>
@@ -211,103 +198,82 @@ export default function Transactions({ user }) {
         )}
       </motion.div>
 
-      {/* Modal */}
-      <AnimatePresence>
-        {showModal && (
-          <motion.div key="backdrop"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <motion.div key="modal"
-              initial={{ opacity: 0, scale: 0.92, y: 24 }}
-              animate={{ opacity: 1, scale: 1,    y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 16 }}
-              transition={{ type: 'spring', stiffness: 280, damping: 24 }}
-              className="w-full max-w-md rounded-2xl p-8 shadow-[0_40px_100px_rgba(0,0,0,0.7)]"
-              style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.08)' }}>
+      {/* CREATE MODAL */}
+      <StandardModal isOpen={isModalOpen} onClose={() => setModalOpen(false)} title="New Transaction">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex gap-4 mb-2">
+            <button type="button" onClick={() => setFormData({ ...formData, type: 'EXPENSE' })}
+              className={`flex-1 py-2.5 rounded-lg text-[13px] font-semibold transition-all border ${
+                formData.type === 'EXPENSE' ? 'bg-[#FF453A] text-white border-[#FF453A]' : 'bg-[#111] text-slate-400 border-[#222] hover:bg-[#222]'
+              }`}>
+              Expense
+            </button>
+            <button type="button" onClick={() => setFormData({ ...formData, type: 'INCOME' })}
+              className={`flex-1 py-2.5 rounded-lg text-[13px] font-semibold transition-all border ${
+                formData.type === 'INCOME' ? 'bg-[#30D158] text-white border-[#30D158]' : 'bg-[#111] text-slate-400 border-[#222] hover:bg-[#222]'
+              }`}>
+              Income
+            </button>
+          </div>
 
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-white">
-                  {isAdmin ? 'Add Transaction' : 'New Transaction'}
-                </h3>
-                <button onClick={() => { setShowModal(false); setForm(EMPTY); }}
-                  className="p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-500 hover:text-white transition-colors">
-                  <X size={15} />
-                </button>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 mb-1">Amount</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                <input
+                  type="number" step="0.01" required min="0.01" placeholder="0.00"
+                  value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })}
+                  className={`${inputCls} pl-8`}
+                />
               </div>
+            </div>
 
-              <form onSubmit={submit} className="space-y-4">
-                {isAdmin && (
-                  <div>
-                    <label className={labelCls}>Assign to User <span className="text-rose-400">*</span></label>
-                    <select required value={form.targetUserId}
-                      onChange={e => setForm(f => ({ ...f, targetUserId: e.target.value }))}
-                      className={inputCls}>
-                      <option value="" className="bg-slate-900">— Select a user —</option>
-                      {users.map(u => (
-                        <option key={u.id} value={u.id} className="bg-slate-900">
-                          {u.name} ({u.role})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 mb-1">Category</label>
+              <input
+                type="text" required placeholder="e.g. Server Hosting"
+                value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}
+                className={inputCls}
+              />
+            </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Amount</label>
-                    <input required type="number" step="0.01" min="0.01" placeholder="0.00"
-                      value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                      className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Type</label>
-                    <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                      className={inputCls}>
-                      <option value="EXPENSE" className="bg-slate-900">Expense</option>
-                      <option value="INCOME"  className="bg-slate-900">Income</option>
-                    </select>
-                  </div>
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 mb-1">Description (Optional)</label>
+              <input
+                type="text" placeholder="Extra details..."
+                value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })}
+                className={inputCls}
+              />
+            </div>
+
+            {isAdmin && (
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 mb-1">Assign User</label>
+                <div className="relative">
+                  <select
+                    required value={formData.userId} onChange={e => setFormData({ ...formData, userId: e.target.value })}
+                    className={selectCls}
+                  >
+                    <option value="" disabled className="bg-[#111] text-slate-500">Select a user</option>
+                    {users.map(u => <option key={u.id} value={u.id} className="bg-[#111]">{u.name} ({u.email})</option>)}
+                  </select>
+                  <ChevronRight size={14} className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 text-slate-500 pointer-events-none" />
                 </div>
+              </div>
+            )}
+          </div>
 
-                <div>
-                  <label className={labelCls}>Category</label>
-                  <input required type="text" placeholder="e.g. Salary, Rent, Food…"
-                    value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    className={inputCls} />
-                </div>
-
-                <div>
-                  <label className={labelCls}>Date</label>
-                  <input required type="date" value={form.date}
-                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                    className={inputCls} />
-                </div>
-
-                <div>
-                  <label className={labelCls}>Notes (optional)</label>
-                  <input type="text" placeholder="Brief description…"
-                    value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                    className={inputCls} />
-                </div>
-
-                <div className="flex gap-3 pt-1">
-                  <button type="button" onClick={() => { setShowModal(false); setForm(EMPTY); }}
-                    className="flex-1 py-3 rounded-xl text-sm font-medium text-slate-500 hover:text-white border border-white/[0.06] hover:bg-white/[0.04] transition-colors">
-                    Cancel
-                  </button>
-                  <motion.button type="submit"
-                    whileHover={{ scale: 1.02, boxShadow: '0 0 24px rgba(59,130,246,0.4)' }}
-                    whileTap={{ scale: 0.97 }}
-                    className="flex-1 py-3 rounded-xl text-sm font-bold text-white"
-                    style={{ background: 'linear-gradient(135deg,#3b82f6,#6366f1)' }}>
-                    Save Transaction
-                  </motion.button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          <div className="pt-2">
+            <button
+              type="submit" disabled={submitting}
+              className="w-full py-3 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white text-[13px] font-bold transition-all disabled:opacity-50"
+            >
+              {submitting ? 'Processing...' : 'Save Transaction'}
+            </button>
+          </div>
+        </form>
+      </StandardModal>
     </div>
   );
 }

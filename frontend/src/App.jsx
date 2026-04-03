@@ -41,9 +41,11 @@ function App() {
 
   return (
     <Router>
-      <div className="flex h-screen bg-navy text-white overflow-hidden">
+      <div className="flex h-screen bg-black text-white overflow-hidden relative selection:bg-[#0A84FF] selection:text-white">
+        
         <Sidebar user={user} onLogout={handleLogout} />
-        <main className="flex-1 overflow-y-auto relative">
+        
+        <main className="flex-1 overflow-y-auto relative z-10 w-full bg-black">
           <AnimatePresence mode="wait">
             <Routes>
               <Route path="/"             element={<PageWrap><Dashboard    user={user} /></PageWrap>} />
@@ -63,10 +65,10 @@ function App() {
 function PageWrap({ children }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.22, ease: 'easeOut' }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       className="min-h-full"
     >
       {children}

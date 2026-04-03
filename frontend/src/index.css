@@ -1,31 +1,30 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..900;1,14..32,300..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ═══════════════════════════════════════
-   DESIGN TOKENS
+   MIDNIGHT LUXURY TOKENS
 ═══════════════════════════════════════ */
 :root {
-  /* Background layers */
-  --navy:      #0f172a;
-  --navy-2:    #1e293b;
-  --navy-3:    #334155;
+  /* Ultra-minimal backgrounds */
+  --bg-primary:   #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary:  #141414;
 
-  /* Sentiment */
-  --emerald:   #10b981;
-  --emerald-bg:rgba(16,185,129,0.12);
-  --rose:      #f43f5e;
-  --rose-bg:   rgba(244,63,94,0.12);
+  /* Neutrals */
+  --text-primary: #ffffff;
+  --text-muted:   #888888;
+  --border-subtle: rgba(255, 255, 255, 0.08);
 
-  /* Brand */
-  --blue:      #3b82f6;
-  --blue-bg:   rgba(59,130,246,0.12);
+  /* Accents */
+  --accent-sapphire: #0A84FF;
+  --accent-emerald:  #30D158;
+  --accent-ruby:     #FF453A;
 
-  /* Glass */
-  --glass-bg:  rgba(30,41,59,0.55);
-  --glass-border: rgba(255,255,255,0.07);
+  /* Minimal Glass Constants */
+  --glass-bg:  rgba(15, 15, 15, 0.6);
 }
 
 /* ═══════════════════════════════════════
@@ -34,58 +33,65 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
-  background: var(--navy);
-  color: #e2e8f0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  letter-spacing: -0.01em;
 }
 
 /* ═══════════════════════════════════════
-   GLASS CARD
+   PREMIUM MINIMAL CLASSES
 ═══════════════════════════════════════ */
-.glass {
+.glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid var(--border-subtle);
   border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.subtle-border {
+  border-color: var(--border-subtle);
 }
 
 /* ═══════════════════════════════════════
-   SCROLLBAR
+   SCROLLBAR (Invisible until requested)
 ═══════════════════════════════════════ */
-::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 
 /* ═══════════════════════════════════════
-   RECHARTS OVERRIDE — colour tokens
+   RECHARTS OVERRIDE
 ═══════════════════════════════════════ */
 .recharts-default-tooltip {
-  background: #1e293b !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
-  border-radius: 10px !important;
-  color: #e2e8f0 !important;
-  font-size: 13px !important;
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 8px !important;
+  color: #fff !important;
+  font-family: 'Inter', sans-serif !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.8) !important;
+  padding: 10px 14px !important;
 }
-.recharts-tooltip-label { color: #94a3b8 !important; margin-bottom: 4px; }
+.recharts-tooltip-label { color: var(--text-muted) !important; margin-bottom: 4px; font-weight: 500; font-size: 12px !important; }
 
 /* ═══════════════════════════════════════
-   ANIMATIONS
+   UTILITIES
 ═══════════════════════════════════════ */
-@keyframes pulseBlue {
-  0%,100% { box-shadow: 0 0 0 0   rgba(59,130,246,0.0); }
-  50%      { box-shadow: 0 0 28px 4px rgba(59,130,246,0.25); }
+.btn-primary {
+  background-color: var(--accent-sapphire);
+  color: #fff;
+  transition: background-color 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.pulse-blue { animation: pulseBlue 3s ease-in-out infinite; }
-
-@keyframes floatY {
-  0%,100% { transform: translateY(0); }
-  50%      { transform: translateY(-10px); }
+.btn-primary:hover {
+  background-color: #0070E0;
 }
-.float { animation: floatY 6s ease-in-out infinite; }
-
-/* Tailwind utility for bg-navy */
-.bg-navy  { background-color: var(--navy);  }
-.bg-navy2 { background-color: var(--navy-2);}
+.text-sapphire { color: var(--accent-sapphire); }
+.text-emerald  { color: var(--accent-emerald); }
+.text-ruby     { color: var(--accent-ruby); }
