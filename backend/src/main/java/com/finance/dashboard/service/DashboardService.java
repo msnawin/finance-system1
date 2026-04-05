@@ -22,11 +22,11 @@ public class DashboardService {
     private final TransactionRepository transactionRepository;
 
     /**
-     * ADMIN → sees aggregate data for ALL users (targetUserId = null).
-     * ANALYST / VIEWER → sees only their own data (targetUserId = their ID).
+     * ADMIN / ANALYST → sees aggregate data for ALL users (targetUserId = null).
+     * VIEWER → sees only their own data (targetUserId = their ID).
      */
     public DashboardSummaryDto getDashboardSummary(Long userId, Role role) {
-        Long targetUserId = (role == Role.ADMIN) ? null : userId;
+        Long targetUserId = (role == Role.VIEWER) ? userId : null;
 
         BigDecimal totalIncome = transactionRepository.sumAmountByType(TransactionType.INCOME, targetUserId);
         BigDecimal totalExpense = transactionRepository.sumAmountByType(TransactionType.EXPENSE, targetUserId);

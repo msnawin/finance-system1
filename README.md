@@ -1,58 +1,212 @@
-# Finance Dashboard System
+# 💰 Finance System
 
-A full-stack Finance Dashboard application demonstrating a clean architecture, role-based access control, and a modern frontend interface.
-
-## Tech Stack
-- **Backend**: Java 17, Spring Boot 3, Spring Web, Spring Data JPA, MySQL 8
-- **Frontend**: React.js, Vite, Tailwind CSS, Axios, Recharts, Lucide React
-
-## Project Overview
-
-This system provides a unified dashboard to track financial income and expenses. It enforces role-based access to securely restrict sensitive data and operations based on user privileges.
-
-### Role-Based Access Control
-
-- **VIEWER**: Can read the Dashboard summary analytics. Cannot access the Transactions list or modify data.
-- **ANALYST**: Can view the Dashboard and view the Transactions list. Cannot create, delete, or manage users.
-- **ADMIN**: Has full access. Can view the Dashboard, view/create/delete Transactions, and manage User activation status.
-
-*Note on Authentication*: The application uses a mock authentication approach to simplify testing. You select a user at the Login screen, which passes their ID as an `X-User-Id` HTTP header to the backend.
+A full-stack, role-based Finance Dashboard built with **Spring Boot** (backend) and **React + Vite** (frontend). Designed for production deployment on [Render](https://render.com).
 
 ---
 
-## Database Setup
+## 🚀 Tech Stack
 
-1. Ensure MySQL server is running locally on port `3306`.
-2. Create a database named `finance_db` if it does not auto-create.
-3. Access credentials configured in `application.properties`:
-   - Username: `root`
-   - Password: `nawinthegoogler07`
-4. The database tables (`users`, `transactions`) are auto-generated via Hibernate `update`.
-5. Upon the first startup, a `DataSeeder` automatically populates the database with default Admin/Analyst/Viewer users and a few sample transactions.
+### Backend
+- Java 17 + Spring Boot 3.2
+- Spring Security + JWT Authentication
+- Spring Data JPA + MySQL
+- Lombok, Swagger/OpenAPI
+
+### Frontend
+- React 18 + TypeScript + Vite
+- Tailwind CSS v3.4
+- Zustand (State Management)
+- Axios + React Router v6
+- Recharts (Data Visualization)
 
 ---
 
-## How to Run the Backend
+## 🔐 Role-Based Access Control
 
-1. Navigate to the `backend` directory.
-2. Run the Spring Boot application. If you have Maven installed, use:
-   ```bash
-   mvnw spring-boot:run
-   ```
-   Or run the main class `FinanceDashboardApplication` via your IDE.
-3. The server runs on `http://localhost:8080`.
-4. API Documentation (Swagger) is available at `http://localhost:8080/swagger-ui.html`.
+| Feature | ADMIN | ANALYST | VIEWER |
+|---|---|---|---|
+| Dashboard | ✅ All users' data | ✅ All users' data | ✅ Own data only |
+| Transactions (view) | ✅ All | ✅ All | ✅ Own only |
+| Transactions (create/edit/delete) | ✅ Yes | ❌ No | ❌ No |
+| Assign transaction to user | ✅ Yes | ❌ No | ❌ No |
+| User Management | ✅ Yes | ❌ No | ❌ No |
 
-## How to Run the Frontend
+---
 
-1. Navigate to the `frontend` directory.
-2. Ensure you have Node.js installed.
-3. Install dependencies:
-   ```bash
-   npm install
-   ```
-4. Start the development server:
-   ```bash
-   npm run dev
-   ```
-5. Open `http://localhost:5173` in your browser.
+## 🗂️ Project Structure
+
+```
+finance-system/
+├── backend/          # Spring Boot application
+│   ├── src/
+│   └── pom.xml
+├── frontend/         # React + Vite application
+│   ├── src/
+│   └── package.json
+├── render.yaml       # Render deployment config
+└── README.md
+```
+
+---
+
+## ⚙️ Local Development
+
+### Prerequisites
+- Java 17+
+- Maven 3.8+
+- Node.js 18+
+- MySQL 8+
+
+### Backend
+
+```bash
+cd backend
+
+# Create database
+mysql -u root -p -e "CREATE DATABASE finance_db;"
+
+# Run (uses application.properties defaults)
+./mvnw spring-boot:run
+```
+
+Backend runs on: `http://localhost:8080`  
+Swagger UI: `http://localhost:8080/swagger-ui.html`
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend runs on: `http://localhost:5173`
+
+---
+
+## 🔑 Default Credentials (seeded on first run)
+
+| Email | Password | Role |
+|---|---|---|
+| admin@finance.com | admin123 | ADMIN |
+| analyst@finance.com | admin123 | ANALYST |
+| viewer@finance.com | admin123 | VIEWER |
+
+---
+
+## 🌐 Deploying to Render
+
+This repo includes a `render.yaml` for one-click Render deployment. You'll need:
+
+1. A **MySQL database** (e.g. [PlanetScale](https://planetscale.com), [Railway](https://railway.app), or Render's own MySQL add-on)
+2. A Render account connected to this GitHub repo
+
+### Step 1 — Deploy via Render Blueprint
+
+1. Go to [Render Dashboard](https://dashboard.render.com)
+2. Click **New → Blueprint**
+3. Connect this GitHub repo
+4. Render will read `render.yaml` and create both services automatically
+
+### Step 2 — Set Environment Variables
+
+#### Backend Service (`finance-system-backend`) — set in Render dashboard:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | `jdbc:mysql://<host>:<port>/<dbname>?useSSL=true&allowPublicKeyRetrieval=true` |
+| `DATABASE_USERNAME` | Your MySQL username |
+| `DATABASE_PASSWORD` | Your MySQL password |
+| `JWT_SECRET` | Auto-generated by Render (64+ char hex string) |
+| `ALLOWED_ORIGINS` | Your frontend Render URL e.g. `https://finance-system-frontend.onrender.com` |
+
+#### Frontend Service (`finance-system-frontend`) — set in Render dashboard:
+
+| Variable | Value |
+|---|---|
+| `VITE_API_BASE_URL` | Your backend Render URL e.g. `https://finance-system-backend.onrender.com/api` |
+
+### Step 3 — Deploy
+
+Click **Deploy** — Render will:
+- Build the Spring Boot JAR and launch it
+- Build the React app (`npm run build`) and serve `dist/` as a static site
+
+> ⚠️ **Free tier note:** Render free services spin down after 15 minutes of inactivity. The first request after a cold start may take 30–60 seconds.
+
+---
+
+## 📡 API Endpoints
+
+### Auth
+```
+POST /api/auth/login      → Returns JWT token
+```
+
+### Dashboard
+```
+GET  /api/dashboard/summary   → KPIs, charts, recent transactions
+```
+
+### Transactions
+```
+GET    /api/transactions        → List (paginated, filtered by role)
+POST   /api/transactions        → Create (ADMIN only)
+PUT    /api/transactions/{id}   → Update (ADMIN only)
+DELETE /api/transactions/{id}   → Delete (ADMIN only)
+```
+
+### Users
+```
+GET    /api/users          → List all users (ADMIN only)
+POST   /api/users          → Create user (ADMIN only)
+PUT    /api/users/{id}     → Update user (ADMIN only)
+DELETE /api/users/{id}     → Delete user (ADMIN only)
+```
+
+---
+
+## 🔧 Environment Variables Reference
+
+### Backend
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `8080` | Server port |
+| `DATABASE_URL` | `jdbc:mysql://localhost:3306/finance_db` | MySQL JDBC URL |
+| `DATABASE_USERNAME` | `root` | DB username |
+| `DATABASE_PASSWORD` | _(empty)_ | DB password |
+| `JWT_SECRET` | _(hardcoded fallback)_ | 256-bit hex secret |
+| `ALLOWED_ORIGINS` | `http://localhost:5173` | CORS allowed origins (comma-separated) |
+
+### Frontend
+
+| Variable | Default | Description |
+|---|---|---|
+| `VITE_API_BASE_URL` | `http://localhost:8080/api` | Backend API base URL |
+
+---
+
+## 📦 Building for Production
+
+### Backend
+```bash
+cd backend
+mvn clean package -DskipTests
+# Output: target/dashboard-0.0.1-SNAPSHOT.jar
+java -jar target/dashboard-0.0.1-SNAPSHOT.jar
+```
+
+### Frontend
+```bash
+cd frontend
+npm run build
+# Output: dist/  (serve with any static file server)
+npx serve -s dist
+```
+
+---
+
+## 📄 License
+
+MIT

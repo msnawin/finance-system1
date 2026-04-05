@@ -37,21 +37,20 @@ public class TransactionController {
     @PostMapping
     public ResponseEntity<TransactionDto> createTransaction(@Valid @RequestBody TransactionDto dto) {
         User caller = getAuthenticatedUser();
-        if (caller.getRole() != Role.ADMIN) {
-            throw new UnauthorizedException("Only admins can create transactions");
-        }
 
-        // Admin can assign to a specific user, or defaults to self
-        Long ownerId = (dto.getTargetUserId() != null) ? dto.getTargetUserId() : caller.getId();
+        // Admin can assign to a specific user, all others can only create for themselves
+        Long ownerId = caller.getId();
+        if (caller.getRole() == Role.ADMIN && dto.getTargetUserId() != null) {
+            ownerId = dto.getTargetUserId();
+        }
 
         return new ResponseEntity<>(transactionService.createTransaction(dto, ownerId), HttpStatus.CREATED);
     }
 
     /**
      * Get transactions:
-     * - ADMIN: sees ALL transactions.
-     * - ANALYST: sees only their own.
-     * - VIEWER: blocked.
+     * - ADMIN & ANALYST: sees ALL transactions.
+     * - VIEWER: sees only their own.
      */
     @GetMapping
     public ResponseEntity<Page<TransactionDto>> getTransactions(
@@ -63,12 +62,9 @@ public class TransactionController {
             Pageable pageable) {
 
         User caller = getAuthenticatedUser();
-        if (caller.getRole() == Role.VIEWER) {
-            throw new UnauthorizedException("Viewers can only access the dashboard");
-        }
 
-        // Admin sees everything; others see only their own
-        Long filterUserId = (caller.getRole() == Role.ADMIN) ? null : caller.getId();
+        // Admin and Analyst see everything; Viewer sees only their own
+        Long filterUserId = (caller.getRole() == Role.VIEWER) ? caller.getId() : null;
 
         return ResponseEntity.ok(
             transactionService.getTransactions(type, category, startDate, endDate, search, filterUserId, pageable)

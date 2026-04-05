@@ -1,97 +1,47 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ═══════════════════════════════════════
-   MIDNIGHT LUXURY TOKENS
-═══════════════════════════════════════ */
-:root {
-  /* Ultra-minimal backgrounds */
-  --bg-primary:   #000000;
-  --bg-secondary: #0a0a0a;
-  --bg-tertiary:  #141414;
+@layer base {
+  :root {
+    --background: #F3F4F6;
+    --card: #FFFFFF;
+    --card-content: #F8FAFC;
+    --border: #E5E7EB;
+    --primary: #10B981; /* Default to emerald even in light mode for finance vibe */
+    --primary-hover: #059669;
+    --danger: #EF4444;
+    --success: #10B981;
+    --text-main: #111827;
+    --text-muted: #6B7280;
+  }
+  
+  .dark {
+    --background: #0B0F19;
+    --card: #151C2C;
+    --card-content: #1A233A;
+    --border: #2C3A5A;
+    --primary: #10B981; 
+    --primary-hover: #059669;
+    --danger: #F87171;
+    --success: #34D399;
+    --text-main: #F9FAFB;
+    --text-muted: #9CA3AF;
+  }
 
-  /* Neutrals */
-  --text-primary: #ffffff;
-  --text-muted:   #888888;
-  --border-subtle: rgba(255, 255, 255, 0.08);
-
-  /* Accents */
-  --accent-sapphire: #0A84FF;
-  --accent-emerald:  #30D158;
-  --accent-ruby:     #FF453A;
-
-  /* Minimal Glass Constants */
-  --glass-bg:  rgba(15, 15, 15, 0.6);
+  body {
+    @apply bg-background text-textMain antialiased transition-colors duration-300;
+  }
 }
 
-/* ═══════════════════════════════════════
-   BASE
-═══════════════════════════════════════ */
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  overflow: hidden;
-  letter-spacing: -0.01em;
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
-
-/* ═══════════════════════════════════════
-   PREMIUM MINIMAL CLASSES
-═══════════════════════════════════════ */
-.glass-panel {
-  background: var(--glass-bg);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
 }
-
-.subtle-border {
-  border-color: var(--border-subtle);
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full hover:bg-textMuted transition-colors;
 }
-
-/* ═══════════════════════════════════════
-   SCROLLBAR (Invisible until requested)
-═══════════════════════════════════════ */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
-
-/* ═══════════════════════════════════════
-   RECHARTS OVERRIDE
-═══════════════════════════════════════ */
-.recharts-default-tooltip {
-  background: var(--bg-secondary) !important;
-  border: 1px solid var(--border-subtle) !important;
-  border-radius: 8px !important;
-  color: #fff !important;
-  font-family: 'Inter', sans-serif !important;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.8) !important;
-  padding: 10px 14px !important;
-}
-.recharts-tooltip-label { color: var(--text-muted) !important; margin-bottom: 4px; font-weight: 500; font-size: 12px !important; }
-
-/* ═══════════════════════════════════════
-   UTILITIES
-═══════════════════════════════════════ */
-.btn-primary {
-  background-color: var(--accent-sapphire);
-  color: #fff;
-  transition: background-color 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.btn-primary:hover {
-  background-color: #0070E0;
-}
-.text-sapphire { color: var(--accent-sapphire); }
-.text-emerald  { color: var(--accent-emerald); }
-.text-ruby     { color: var(--accent-ruby); }
