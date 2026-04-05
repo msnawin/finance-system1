@@ -1,3 +1,10 @@
+databases:
+  # ─── Render Free PostgreSQL ───────────────────────────────────────────────────
+  - name: finance-db
+    databaseName: finance_db
+    user: finance_user
+    plan: free
+
 services:
   # ─── Backend: Spring Boot ────────────────────────────────────────────────────
   - type: web
@@ -8,22 +15,19 @@ services:
     rootDir: backend
     buildCommand: mvn clean package -DskipTests
     startCommand: java -jar target/dashboard-0.0.1-SNAPSHOT.jar
-    healthCheckPath: /api/auth/health
     envVars:
-      - key: PORT
-        value: 8080
       - key: DATABASE_URL
-        sync: false   # Set this in Render dashboard → your MySQL connection string
-      - key: DATABASE_USERNAME
-        sync: false
-      - key: DATABASE_PASSWORD
-        sync: false
+        fromDatabase:
+          name: finance-db
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: ALLOWED_ORIGINS
-        sync: false   # Set to your frontend Render URL e.g. https://finance-frontend.onrender.com
+        sync: false   # Set this AFTER frontend deploys → paste frontend URL here
       - key: JAVA_VERSION
         value: "17"
+      - key: PORT
+        value: "8080"
 
   # ─── Frontend: React/Vite Static Site ───────────────────────────────────────
   - type: web
@@ -38,4 +42,4 @@ services:
       - key: NODE_VERSION
         value: "20"
       - key: VITE_API_BASE_URL
-        sync: false   # Set to your backend Render URL e.g. https://finance-system-backend.onrender.com/api
+        sync: false   # Set this → paste backend URL e.g. https://finance-system-backend.onrender.com/api

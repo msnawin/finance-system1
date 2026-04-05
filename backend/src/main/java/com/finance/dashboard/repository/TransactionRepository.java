@@ -53,11 +53,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
            "ORDER BY t.date DESC")
     List<Transaction> findRecentTransactions(@Param("userId") Long userId, Pageable pageable);
 
-    // Monthly trends
-    @Query(value = "SELECT DATE_FORMAT(date, '%Y-%m') as monthStr, " +
+    // Monthly trends (last 12 months) — PostgreSQL compatible
+    @Query(value = "SELECT TO_CHAR(date, 'YYYY-MM') as monthStr, " +
             "SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income, " +
             "SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense " +
             "FROM transactions WHERE deleted = false AND (:userId IS NULL OR created_by_id = :userId) " +
-            "GROUP BY DATE_FORMAT(date, '%Y-%m') ORDER BY monthStr DESC LIMIT 12", nativeQuery = true)
+            "GROUP BY TO_CHAR(date, 'YYYY-MM') ORDER BY monthStr DESC LIMIT 12", nativeQuery = true)
     List<Object[]> findMonthlyTrends(@Param("userId") Long userId);
 }
