@@ -15,14 +15,12 @@ services:
     rootDir: backend
     dockerfilePath: Dockerfile
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: finance-db
-          property: connectionString
+      - key: SPRING_DATASOURCE_URL
+        sync: false   # IMPORTANT: You must paste the JDBC URL here (starts with jdbc:postgresql://)
       - key: JWT_SECRET
         generateValue: true
       - key: ALLOWED_ORIGINS
-        sync: false   # IMPORTANT: You must paste the frontend URL here in Render UI
+        sync: false   # IMPORTANT: Use the frontend URL here
       - key: PORT
         value: "8080"
 
@@ -39,4 +37,4 @@ services:
       - key: NODE_VERSION
         value: "20"
       - key: VITE_API_BASE_URL
-        sync: false   # IMPORTANT: You must paste the backend URL here in Render UI
+        sync: false
