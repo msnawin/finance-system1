@@ -20,17 +20,26 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
      * Filtered query. If userId is NULL (admin), returns all transactions.
      * If userId is provided, returns only that user's transactions.
      */
-    @Query("SELECT t FROM Transaction t WHERE t.deleted = false AND " +
-           "(:userId IS NULL OR t.createdBy.id = :userId) AND " +
-           "(:type IS NULL OR t.type = :type) AND " +
-           "(:category IS NULL OR t.category = :category) AND " +
-           "(:startDate IS NULL OR t.date >= :startDate) AND " +
-           "(:endDate IS NULL OR t.date <= :endDate) AND " +
-           "(:search IS NULL OR LOWER(CAST(t.notes AS string)) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "   OR LOWER(CAST(t.category AS string)) LIKE LOWER(CONCAT('%', :search, '%')))")
+    @Query(value = "SELECT * FROM transactions t WHERE t.deleted = false AND " +
+                   "(:userId IS NULL OR t.created_by_id = :userId) AND " +
+                   "(:type IS NULL OR t.type = :type) AND " +
+                   "(:category IS NULL OR t.category = :category) AND " +
+                   "(:startDate IS NULL OR t.date >= :startDate) AND " +
+                   "(:endDate IS NULL OR t.date <= :endDate) AND " +
+                   "(:search IS NULL OR LOWER(CAST(t.notes AS TEXT)) LIKE LOWER(CONCAT('%', :search, '%')) " +
+                   "   OR LOWER(CAST(t.category AS TEXT)) LIKE LOWER(CONCAT('%', :search, '%')))",
+           countQuery = "SELECT count(*) FROM transactions t WHERE t.deleted = false AND " +
+                        "(:userId IS NULL OR t.created_by_id = :userId) AND " +
+                        "(:type IS NULL OR t.type = :type) AND " +
+                        "(:category IS NULL OR t.category = :category) AND " +
+                        "(:startDate IS NULL OR t.date >= :startDate) AND " +
+                        "(:endDate IS NULL OR t.date <= :endDate) AND " +
+                        "(:search IS NULL OR LOWER(CAST(t.notes AS TEXT)) LIKE LOWER(CONCAT('%', :search, '%')) " +
+                        "   OR LOWER(CAST(t.category AS TEXT)) LIKE LOWER(CONCAT('%', :search, '%')))",
+           nativeQuery = true)
     Page<Transaction> findAllFiltered(
             @Param("userId") Long userId,
-            @Param("type") TransactionType type,
+            @Param("type") String type, // String for native
             @Param("category") String category,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
