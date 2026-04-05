@@ -27,12 +27,13 @@ public class Transaction {
     @Column(nullable = false)
     private TransactionType type;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String category;
 
     @Column(nullable = false)
     private LocalDate date;
 
+    @Column(columnDefinition = "TEXT")
     private String notes;
 
     @ManyToOne(fetch = FetchType.LAZY)
