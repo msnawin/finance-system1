@@ -26,8 +26,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
            "(:category IS NULL OR t.category = :category) AND " +
            "(:startDate IS NULL OR t.date >= :startDate) AND " +
            "(:endDate IS NULL OR t.date <= :endDate) AND " +
-           "(:search IS NULL OR LOWER(t.notes) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "   OR LOWER(t.category) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(:search IS NULL OR LOWER(CAST(t.notes AS string)) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "   OR LOWER(CAST(t.category AS string)) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<Transaction> findAllFiltered(
             @Param("userId") Long userId,
             @Param("type") TransactionType type,
