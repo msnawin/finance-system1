@@ -32,6 +32,22 @@ A full-stack, role-based Finance Dashboard built with **Spring Boot** (backend) 
 | User Management | ✅ Yes | ❌ No | ❌ No |
 
 ---
+## 📸 Screenshots
+
+### Login Page
+![Dashboard](https://raw.githubusercontent.com/msnawin/finance-system1/6c3ba428c3a92a272e17ccdd43d6d92c94350863/Screenshot%202026-04-05%20164937.png)
+
+### 💻 Dashboard
+![Transactions](https://raw.githubusercontent.com/msnawin/finance-system1/6c3ba428c3a92a272e17ccdd43d6d92c94350863/Screenshot%202026-04-05%20165016.png)
+
+### 📈 Transaction List
+![Analytics](https://raw.githubusercontent.com/msnawin/finance-system1/6c3ba428c3a92a272e17ccdd43d6d92c94350863/Screenshot%202026-04-05%20165041.png)
+
+### 📑 Adding Transactions
+![Reports](https://raw.githubusercontent.com/msnawin/finance-system1/6c3ba428c3a92a272e17ccdd43d6d92c94350863/Screenshot%202026-04-05%20165052.png)
+
+### 📱 User Lists
+![Mobile](https://raw.githubusercontent.com/msnawin/finance-system1/6c3ba428c3a92a272e17ccdd43d6d92c94350863/Screenshot%202026-04-05%20165116.png)
 
 ## 🗂️ Project Structure
 
