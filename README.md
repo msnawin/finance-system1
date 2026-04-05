@@ -207,6 +207,4 @@ npx serve -s dist
 
 ---
 
-## 📄 License
 
-MIT
