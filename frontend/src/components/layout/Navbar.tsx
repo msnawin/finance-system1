@@ -4,7 +4,7 @@ import { Moon, Sun, Menu, Bell, LogOut } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 export const Navbar = () => {
-  const { theme, toggleTheme } = useUIStore();
+  const { theme, toggleTheme, toggleSidebar } = useUIStore();
   const { user } = useAuthStore();
   const location = useLocation();
 
@@ -17,7 +17,10 @@ export const Navbar = () => {
   return (
     <header className="h-16 bg-card/80 backdrop-blur-md border-b border-border flex items-center justify-between px-4 md:px-8 z-10 sticky top-0">
       <div className="flex items-center gap-4">
-        <button className="md:hidden p-2 text-textMuted hover:bg-background rounded-lg">
+        <button 
+          onClick={toggleSidebar}
+          className="md:hidden p-2 text-textMuted hover:bg-background rounded-lg transition-colors"
+        >
           <Menu className="w-5 h-5" />
         </button>
         <h1 className="text-xl font-semibold text-textMain capitalize tracking-tight">
