@@ -49,7 +49,7 @@ public class TransactionService {
             String search, Long filterUserId, Pageable pageable) {
 
         return transactionRepository
-                .findAllFiltered(filterUserId, type, category, startDate, endDate, search, pageable)
+                .findAllFiltered(filterUserId, type != null ? type.name() : null, category, startDate, endDate, search, pageable)
                 .map(this::mapToDto);
     }
 
