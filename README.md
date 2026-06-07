@@ -169,7 +169,7 @@ GET  /api/dashboard/summary   → KPIs, charts, recent transactions
 GET    /api/transactions        → List (paginated, filtered by role)
 POST   /api/transactions        → Create (ADMIN only)
 PUT    /api/transactions/{id}   → Update (ADMIN only)
-DELETE /api/transactions/{id}   → Delete (ADMIN only)
+DELETE /api/transactions/{id}   → Delete (ADMIN only).
 ```
 
 ### Users
