@@ -10,7 +10,7 @@ A full-stack, role-based Finance Dashboard built with **Spring Boot** (backend) 
 - Java 17 + Spring Boot 3.2
 - Spring Security + JWT Authentication
 - Spring Data JPA + MySQL
-- Lombok, Swagger/OpenAPI
+- Lombok, Swagger
 
 ### Frontend
 - React 18 + TypeScript + Vite
